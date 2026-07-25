@@ -1,24 +1,57 @@
-<?php
-$user = current_user();
-?>
-<header class="topbar">
-    <div class="brand">
-        <div class="brand-mark">SG</div>
-        <div>
-            <div class="brand-title"><?= e(APP_NAME) ?></div>
-            <div class="brand-subtitle">Local-hosted gated community system</div>
-        </div>
-    </div>
+<header class="navbar">
 
-    <nav class="topnav">
-        <a href="<?= e(url('index.php')) ?>">Home</a>
-        <?php if ($user): ?>
-            <span class="user-pill"><?= e($user['full_name']) ?> (<?= e($user['role']) ?>)</span>
-            <a href="<?= e(url('api/logout.php')) ?>">Logout</a>
-        <?php else: ?>
-            <a href="<?= e(url('resident/login.php')) ?>">Resident</a>
-            <a href="<?= e(url('guard/login.php')) ?>">Guard</a>
-            <a href="<?= e(url('admin/login.php')) ?>">Admin</a>
-        <?php endif; ?>
-    </nav>
+<div class="container nav-container">
+
+<div class="logo">
+
+<div class="logo-icon">
+
+<i class="bi bi-shield-lock-fill"></i>
+
+</div>
+
+<div>
+
+<?=APP_NAME?>
+
+</div>
+
+</div>
+
+<div class="nav-links">
+
+<a href="<?=url()?>">
+
+Home
+
+</a>
+
+<?php if($user): ?>
+
+<span>
+
+<?=e($user['fullname'])?>
+
+</span>
+
+<a href="<?=url('logout.php')?>">
+
+Logout
+
+</a>
+
+<?php else: ?>
+
+<a href="<?=url('login.php')?>">
+
+Login
+
+</a>
+
+<?php endif; ?>
+
+</div>
+
+</div>
+
 </header>

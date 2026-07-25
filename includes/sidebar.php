@@ -1,32 +1,79 @@
-<?php
-$user = current_user();
-$role = $user['role'] ?? '';
-?>
 <aside class="sidebar">
-    <div class="sidebar-group">
-        <a href="<?= e(url('index.php')) ?>">Landing Page</a>
-        <?php if ($role === 'resident'): ?>
-            <a href="<?= e(url('resident/dashboard.php')) ?>">Dashboard</a>
-            <a href="<?= e(url('resident/vehicles.php')) ?>">Vehicles</a>
-            <a href="<?= e(url('resident/book_visitor.php')) ?>">Book Visitor</a>
-            <a href="<?= e(url('resident/bookings.php')) ?>">Bookings</a>
-            <a href="<?= e(url('resident/notifications.php')) ?>">Notifications</a>
-            <a href="<?= e(url('resident/profile.php')) ?>">Profile</a>
-        <?php elseif ($role === 'guard'): ?>
-            <a href="<?= e(url('guard/dashboard.php')) ?>">Dashboard</a>
-            <a href="<?= e(url('guard/scan_qr.php')) ?>">Scan QR</a>
-            <a href="<?= e(url('guard/walkin.php')) ?>">Walk-in</a>
-            <a href="<?= e(url('guard/manual_gate.php')) ?>">Manual Gate</a>
-            <a href="<?= e(url('guard/logs.php')) ?>">Logs</a>
-        <?php elseif ($role === 'admin'): ?>
-            <a href="<?= e(url('admin/dashboard.php')) ?>">Dashboard</a>
-            <a href="<?= e(url('admin/users.php')) ?>">Users</a>
-            <a href="<?= e(url('admin/residents.php')) ?>">Residents</a>
-            <a href="<?= e(url('admin/vehicles.php')) ?>">Vehicles</a>
-            <a href="<?= e(url('admin/rfid.php')) ?>">RFID</a>
-            <a href="<?= e(url('admin/reports.php')) ?>">Reports</a>
-            <a href="<?= e(url('admin/blacklist.php')) ?>">Blacklist</a>
-            <a href="<?= e(url('admin/settings.php')) ?>">Settings</a>
-        <?php endif; ?>
-    </div>
+
+<div class="sidebar-header">
+
+<h2>
+
+Dashboard
+
+</h2>
+
+<small>
+
+<?=e($user['role'])?>
+
+</small>
+
+</div>
+
+<div class="sidebar-menu">
+
+<a class="active" href="dashboard.php">
+
+<i class="bi bi-speedometer2"></i>
+
+Dashboard
+
+</a>
+
+<a href="#">
+
+<i class="bi bi-car-front-fill"></i>
+
+Vehicles
+
+</a>
+
+<a href="#">
+
+<i class="bi bi-person-vcard-fill"></i>
+
+Visitors
+
+</a>
+
+<a href="#">
+
+<i class="bi bi-credit-card"></i>
+
+RFID
+
+</a>
+
+<a href="#">
+
+<i class="bi bi-camera-video-fill"></i>
+
+Cameras
+
+</a>
+
+<a href="#">
+
+<i class="bi bi-door-open-fill"></i>
+
+Gate
+
+</a>
+
+<a href="#">
+
+<i class="bi bi-gear-fill"></i>
+
+Settings
+
+</a>
+
+</div>
+
 </aside>

@@ -1,17 +1,47 @@
 <?php
-require_once __DIR__ . '/functions.php';
-$user = current_user();
+
+require_once __DIR__.'/functions.php';
+
 $pageTitle = $pageTitle ?? APP_NAME;
+$user = current_user();
+
 ?>
-<!doctype html>
+<!DOCTYPE html>
+
 <html lang="en">
+
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= e($pageTitle) ?> | <?= e(APP_NAME) ?></title>
-    <link rel="stylesheet" href="<?= e(url('assets/css/style.css')) ?>">
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+content="width=device-width, initial-scale=1">
+
+<title><?=e($pageTitle)?> | <?=APP_NAME?></title>
+
+<link rel="stylesheet"
+href="<?=url('assets/css/style.css')?>">
+
+<link
+rel="stylesheet"
+href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
 </head>
+
 <body>
-<div class="app-shell">
-    <?php include __DIR__ . '/navbar.php'; ?>
-    <main class="app-main">
+
+<?php include __DIR__.'/navbar.php'; ?>
+
+<div class="app">
+
+<?php
+
+if($user){
+
+include __DIR__.'/sidebar.php';
+
+}
+
+?>
+
+<div class="main">
