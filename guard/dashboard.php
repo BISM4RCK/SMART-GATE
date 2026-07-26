@@ -4,7 +4,7 @@ require_login();
 $user = current_user();
 if (($user['role'] ?? '') !== 'guard') redirect('../dashboard.php');
 $pageTitle = 'Guard Dashboard';
-$stats = user_stats();
+$stats = role_page_counts();
 $requests = [];
 $vehicles = [];
 $concerns = [];
