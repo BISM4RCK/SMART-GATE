@@ -1,7 +1,6 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
-
 require_once __DIR__ . '/../includes/functions.php';
 
 function json_response(array $payload, int $status = 200): void

@@ -28,7 +28,7 @@ function flash(): void
     $flash = $_SESSION['flash'];
     unset($_SESSION['flash']);
     $type = in_array($flash['type'], ['success', 'danger', 'warning', 'info'], true) ? $flash['type'] : 'info';
-    echo '<div class="alert alert-' . e($type) . ' alert-dismissible fade show shadow-sm" role="alert">';
+    echo '<div class="alert alert-' . e($type) . ' alert-dismissible fade show shadow-sm mb-3" role="alert">';
     echo e($flash['message']);
     echo '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>';
     echo '</div>';
@@ -39,14 +39,9 @@ function current_user(): ?array
     return $_SESSION['user'] ?? null;
 }
 
-function is_logged_in(): bool
-{
-    return (bool) current_user();
-}
-
 function require_login(): void
 {
-    if (!is_logged_in()) redirect('login.php');
+    if (!current_user()) redirect('login.php');
 }
 
 function logout_user(): void
@@ -65,46 +60,26 @@ function dashboard_url(?array $user = null): string
     };
 }
 
-function require_role(string $role): void
-{
-    require_login();
-    $user = current_user();
-    if (($user['role'] ?? '') !== $role) redirect('dashboard.php');
-}
-
-function badge_class(string $status): string
-{
-    return match (strtolower($status)) {
-        'approved', 'active', 'open' => 'bg-success-subtle text-success-emphasis',
-        'pending' => 'bg-warning-subtle text-warning-emphasis',
-        'rejected', 'closed' => 'bg-danger-subtle text-danger-emphasis',
-        default => 'bg-secondary-subtle text-secondary-emphasis',
-    };
-}
-
 function user_by_email(string $email): ?array
 {
     $stmt = db()->prepare("SELECT id, full_name, email, password, role, status FROM users WHERE email = ? LIMIT 1");
     $stmt->execute([$email]);
-    $user = $stmt->fetch();
-    return $user ?: null;
+    return $stmt->fetch() ?: null;
 }
 
 function login_with_credentials(string $email, string $password): ?array
 {
     $user = user_by_email($email);
-    if (!$user || !password_verify($password, $user['password'])) {
-        return null;
-    }
-    if (($user['status'] ?? 'active') !== 'active') {
+    if (!$user || !password_verify($password, $user['password']) || ($user['status'] ?? 'active') !== 'active') {
         return null;
     }
 
-    $profile = [];
+    $house = '';
     if ($user['role'] === 'resident') {
-        $stmt = db()->prepare("SELECT house_number FROM residents WHERE user_id = ?");
+        $stmt = db()->prepare("SELECT house_number FROM residents WHERE user_id = ? LIMIT 1");
         $stmt->execute([$user['id']]);
-        $profile = $stmt->fetch() ?: [];
+        $row = $stmt->fetch();
+        $house = $row['house_number'] ?? '';
     }
 
     $_SESSION['user'] = [
@@ -112,42 +87,9 @@ function login_with_credentials(string $email, string $password): ?array
         'name' => $user['full_name'],
         'email' => $user['email'],
         'role' => $user['role'],
-        'house' => $profile['house_number'] ?? '',
+        'house' => $house,
     ];
     return $_SESSION['user'];
-}
-
-function user_stats(): array
-{
-    $user = current_user();
-    if (!$user) return ['pending' => 0, 'vehicles' => 0, 'concerns' => 0, 'logs' => 0];
-
-    if ($user['role'] === 'resident') {
-        $resident = resident_record($user['id']);
-        $residentId = $resident['id'] ?? 0;
-
-        $pending = count_rows("SELECT COUNT(*) c FROM visitor_requests WHERE resident_id = ? AND status = 'pending'", [$residentId]);
-        $vehicles = count_rows("SELECT COUNT(*) c FROM vehicles WHERE resident_id = ?", [$residentId]);
-        $concerns = count_rows("SELECT COUNT(*) c FROM concerns WHERE resident_id = ? AND sender_role = 'resident'", [$residentId]);
-        $logs = count_rows("SELECT COUNT(*) c FROM gate_logs WHERE resident_id = ?", [$residentId]);
-        return compact('pending', 'vehicles', 'concerns', 'logs');
-    }
-
-    if ($user['role'] === 'guard') {
-        return [
-            'pending' => count_rows("SELECT COUNT(*) c FROM visitor_requests WHERE status = 'pending'"),
-            'vehicles' => count_rows("SELECT COUNT(*) c FROM vehicles"),
-            'concerns' => count_rows("SELECT COUNT(*) c FROM concerns"),
-            'logs' => count_rows("SELECT COUNT(*) c FROM gate_logs"),
-        ];
-    }
-
-    return [
-        'pending' => count_rows("SELECT COUNT(*) c FROM visitor_requests WHERE status = 'pending'"),
-        'vehicles' => count_rows("SELECT COUNT(*) c FROM vehicles"),
-        'concerns' => count_rows("SELECT COUNT(*) c FROM concerns"),
-        'logs' => count_rows("SELECT COUNT(*) c FROM gate_logs"),
-    ];
 }
 
 function count_rows(string $sql, array $params = []): int
@@ -162,24 +104,7 @@ function resident_record(int $userId): ?array
 {
     $stmt = db()->prepare("SELECT * FROM residents WHERE user_id = ? LIMIT 1");
     $stmt->execute([$userId]);
-    $row = $stmt->fetch();
-    return $row ?: null;
-}
-
-function guard_record(int $userId): ?array
-{
-    $stmt = db()->prepare("SELECT * FROM guards WHERE user_id = ? LIMIT 1");
-    $stmt->execute([$userId]);
-    $row = $stmt->fetch();
-    return $row ?: null;
-}
-
-function admin_record(int $userId): ?array
-{
-    $stmt = db()->prepare("SELECT * FROM admins WHERE user_id = ? LIMIT 1");
-    $stmt->execute([$userId]);
-    $row = $stmt->fetch();
-    return $row ?: null;
+    return $stmt->fetch() ?: null;
 }
 
 function get_resident_by_house(string $houseNumber): ?array
@@ -192,8 +117,38 @@ function get_resident_by_house(string $houseNumber): ?array
         LIMIT 1
     ");
     $stmt->execute([$houseNumber]);
-    $row = $stmt->fetch();
-    return $row ?: null;
+    return $stmt->fetch() ?: null;
+}
+
+function admin_user_id(): int
+{
+    $row = db()->query("SELECT user_id FROM admins LIMIT 1")->fetch();
+    return (int)($row['user_id'] ?? 0);
+}
+
+function unread_notifications_count(int $userId): int
+{
+    return count_rows("SELECT COUNT(*) c FROM notifications WHERE user_id = ? AND is_read = 0", [$userId]);
+}
+
+function latest_notifications(int $userId, int $limit = 5): array
+{
+    $stmt = db()->prepare("SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT {$limit}");
+    $stmt->execute([$userId]);
+    return $stmt->fetchAll();
+}
+
+function notifications_for_user(int $userId): array
+{
+    $stmt = db()->prepare("SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC");
+    $stmt->execute([$userId]);
+    return $stmt->fetchAll();
+}
+
+function mark_notification_read(int $notificationId, int $userId): bool
+{
+    $stmt = db()->prepare("UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?");
+    return $stmt->execute([$notificationId, $userId]);
 }
 
 function add_log(string $event, string $detail): void
@@ -212,6 +167,7 @@ function add_log(string $event, string $detail): void
 
 function add_notification(int $userId, string $title, string $message): void
 {
+    if ($userId <= 0) return;
     $stmt = db()->prepare("INSERT INTO notifications (user_id, title, message) VALUES (?, ?, ?)");
     $stmt->execute([$userId, $title, $message]);
 }
@@ -227,7 +183,7 @@ function upload_file(array $file): string
     return move_uploaded_file($file['tmp_name'], $target) ? 'uploads/ids/' . $name : '';
 }
 
-function concerns_for_role(array $user): array
+function concerns_for_user(array $user): array
 {
     if (($user['role'] ?? '') === 'resident') {
         $resident = resident_record((int)$user['id']);
@@ -236,7 +192,37 @@ function concerns_for_role(array $user): array
         $stmt->execute([$residentId]);
         return $stmt->fetchAll();
     }
-
     $stmt = db()->query("SELECT * FROM concerns ORDER BY created_at DESC");
     return $stmt->fetchAll();
+}
+
+function role_page_counts(?array $user = null): array
+{
+    $user ??= current_user();
+    if (($user['role'] ?? '') === 'resident') {
+        $resident = resident_record((int)$user['id']);
+        $rid = $resident['id'] ?? 0;
+        return [
+            'pending' => count_rows("SELECT COUNT(*) c FROM visitor_requests WHERE resident_id = ? AND status = 'pending'", [$rid]),
+            'vehicles' => count_rows("SELECT COUNT(*) c FROM vehicles WHERE resident_id = ?", [$rid]),
+            'concerns' => count_rows("SELECT COUNT(*) c FROM concerns WHERE resident_id = ? OR sender_role = 'resident'", [$rid]),
+            'logs' => count_rows("SELECT COUNT(*) c FROM gate_logs WHERE resident_id = ?", [$rid]),
+        ];
+    }
+    return [
+        'pending' => count_rows("SELECT COUNT(*) c FROM visitor_requests WHERE status = 'pending'"),
+        'vehicles' => count_rows("SELECT COUNT(*) c FROM vehicles"),
+        'concerns' => count_rows("SELECT COUNT(*) c FROM concerns"),
+        'logs' => count_rows("SELECT COUNT(*) c FROM gate_logs"),
+    ];
+}
+
+function badge_class(string $status): string
+{
+    return match (strtolower($status)) {
+        'approved', 'active', 'open', 'read' => 'bg-success-subtle text-success-emphasis',
+        'pending', 'unread' => 'bg-warning-subtle text-warning-emphasis',
+        'rejected', 'closed' => 'bg-danger-subtle text-danger-emphasis',
+        default => 'bg-secondary-subtle text-secondary-emphasis',
+    };
 }

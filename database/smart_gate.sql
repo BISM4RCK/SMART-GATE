@@ -241,11 +241,10 @@ CREATE INDEX idx_blacklist_plate ON blacklist(plate_number);
 CREATE INDEX idx_notifications_is_read ON notifications(is_read);
 CREATE INDEX idx_concerns_status ON concerns(status);
 
--- sample accounts
 INSERT INTO users (full_name, email, password, role, status) VALUES
-('Golden Resident', 'resident@goldenhomes.local', '$2y$10$abcdefghijklmnopqrstuv123456789012345678901234567890', 'resident', 'active'),
-('Gate Guard', 'guard@goldenhomes.local', '$2y$10$abcdefghijklmnopqrstuv123456789012345678901234567890', 'guard', 'active'),
-('Subdivision Admin', 'admin@goldenhomes.local', '$2y$10$abcdefghijklmnopqrstuv123456789012345678901234567890', 'admin', 'active');
+('Golden Resident', 'resident@goldenhomes.local', '$2y$12$ZifHz0It8Kg/2kG/N8jrT.fHykuPUzRFYBQPhH9T1sq2dunbVethi', 'resident', 'active'),
+('Gate Guard', 'guard@goldenhomes.local', '$2y$12$DpvWHV2XpE2SvUAVorNt5.ZHqi5F1tQcHJdP6MB/tj7YoGxOUZXCq', 'guard', 'active'),
+('Subdivision Admin', 'admin@goldenhomes.local', '$2y$12$pyXcwzFGJfKoK/xcFkybJ.Vtw7tiPWaakRleU1pEdFBXGsFWmF816', 'admin', 'active');
 
 SET @resident_user_id = (SELECT id FROM users WHERE email='resident@goldenhomes.local' LIMIT 1);
 SET @guard_user_id = (SELECT id FROM users WHERE email='guard@goldenhomes.local' LIMIT 1);
