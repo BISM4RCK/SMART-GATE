@@ -1,533 +1,58 @@
 <?php
-
 require_once __DIR__ . '/includes/functions.php';
+if (current_user()) redirect('dashboard.php');
 
-if (isLoggedIn()) {
-    switch ($user['role']) {
+$pageTitle = 'Login';
+$error = '';
 
-    case 'admin':
-        redirect('admin/dashboard.php');
-        break;
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $email = trim($_POST['email'] ?? '');
+    $password = trim($_POST['password'] ?? '');
+    $account = login_with_credentials($email, $password);
 
-    case 'guard':
-        redirect('guard/dashboard.php');
-        break;
-
-    default:
-        redirect('resident/dashboard.php');
-        break;
-
-}
-}
-
-$pageTitle = "Login";
-
-$error = "";
-
-if ($_SERVER['REQUEST_METHOD'] === "POST") {
-
-    $username = trim($_POST['username'] ?? "");
-    $password = $_POST['password'] ?? "";
-
-    if ($username === "" || $password === "") {
-
-        $error = "Please enter your username and password.";
-
+    if (!$account) {
+        $error = 'Invalid email or password.';
     } else {
-
-        global $pdo;
-
-        $stmt = $pdo->prepare("
-            SELECT *
-            FROM users
-            WHERE username = ?
-            LIMIT 1
-        ");
-
-        $stmt->execute([$username]);
-
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$user) {
-
-            $error = "Invalid username or password.";
-
-        } elseif ($user['status'] != 'active') {
-
-            $error = "Your account has been disabled.";
-
-        } elseif (!password_verify($password, $user['password'])) {
-
-            $error = "Invalid username or password.";
-
-        } else {
-
-            $_SESSION['user_id'] = $user['id'];
-
-            $_SESSION['role'] = $user['role'];
-
-            redirect("dashboard.php");
-
-        }
-
+        add_log('Login', $account['role'] . ' signed in.');
+        flash_set('success', 'Welcome back, ' . $account['name'] . '.');
+        redirect('dashboard.php');
     }
-
 }
 
-require_once __DIR__.'/includes/header.php';
-
+require_once __DIR__ . '/includes/header.php';
 ?>
+<div class="row justify-content-center">
+    <div class="col-lg-6 col-xl-5">
+        <div class="gh-card p-4 p-lg-5">
+            <div class="text-center mb-4">
+                <div class="display-4 mb-2"><i class="bi bi-box-arrow-in-right"></i></div>
+                <h2 class="gh-section-title mb-1">Login</h2>
+                <div class="gh-muted">Use your account email and password.</div>
+            </div>
 
-<div class="login-page">
+            <?php if ($error): ?><div class="alert alert-danger"><?= e($error) ?></div><?php endif; ?>
 
-<div class="login-box">
+            <form method="post" class="d-grid gap-3">
+                <div>
+                    <label for="email" class="form-label">Email</label>
+                    <input id="email" name="email" type="email" class="form-control" placeholder="name@goldenhomes.local" required>
+                </div>
+                <div>
+                    <label for="password" class="form-label">Password</label>
+                    <input id="password" name="password" type="password" class="form-control" placeholder="Password123!" required>
+                </div>
+                <button class="btn gh-primary gh-action-btn" type="submit"><i class="bi bi-box-arrow-in-right me-1"></i>Sign in</button>
+                <a class="btn btn-outline-secondary rounded-pill" href="<?= e(url('index.php')) ?>">Back to home</a>
+            </form>
 
-<div class="login-logo">
-
-<i class="bi bi-shield-lock-fill"></i>
-
+            <div class="mt-4 p-3 rounded-4 bg-light border small">
+                <div class="fw-semibold mb-2">Demo accounts</div>
+                <div>resident@goldenhomes.local</div>
+                <div>guard@goldenhomes.local</div>
+                <div>admin@goldenhomes.local</div>
+                <div class="mt-2">Password: <strong>Password123!</strong></div>
+            </div>
+        </div>
+    </div>
 </div>
-
-<h2>
-
-Smart Gate Login
-
-</h2>
-
-<p>
-
-Sign in to continue
-
-</p>
-
-<?php if($error): ?>
-
-<div class="badge badge-danger w-100 mb-3">
-
-<?=e($error)?>
-
-</div>
-
-<?php endif; ?>
-
-<form method="POST">
-
-<div class="form-group">
-
-<label>
-
-Username
-
-</label>
-
-<div class="input-group">
-
-<i class="bi bi-person-fill"></i>
-
-<input
-
-type="text"
-
-name="username"
-
-class="form-control"
-
-placeholder="Enter Username"
-
-required
-
->
-
-</div>
-
-</div>
-
-<div class="form-group mt-3">
-
-<label>
-
-Password
-
-</label>
-
-<div class="input-group">
-
-<i class="bi bi-lock-fill"></i>
-
-<input
-
-type="password"
-
-name="password"
-
-class="form-control"
-
-placeholder="Enter Password"
-
-required
-
->
-
-</div>
-
-</div>
-<div class="mt-4">
-
-<button
-
-type="submit"
-
-class="btn btn-primary w-100">
-
-<i class="bi bi-box-arrow-in-right"></i>
-
-Login
-
-</button>
-
-</div>
-
-<div class="flex justify-between align-center mt-3">
-
-<label class="flex align-center">
-
-<input
-
-type="checkbox"
-
-name="remember"
-
-style="margin-right:10px;">
-
-Remember Me
-
-</label>
-
-<a href="#">
-
-Forgot Password?
-
-</a>
-
-</div>
-
-</form>
-
-<hr class="mt-4 mb-4">
-
-<h3 class="text-center">
-
-Demo Accounts
-
-</h3>
-
-<p class="text-center mb-4">
-
-Use these sample accounts after importing the database.
-
-</p>
-
-<div class="dashboard-grid">
-
-<div class="card">
-
-<h4>
-
-Administrator
-
-</h4>
-
-<p>
-
-Username
-
-</p>
-
-<strong>
-
-admin
-
-</strong>
-
-<hr class="mt-2 mb-2">
-
-<p>
-
-Role
-
-</p>
-
-<span class="badge badge-primary">
-
-Administrator
-
-</span>
-
-</div>
-
-<div class="card">
-
-<h4>
-
-Resident
-
-</h4>
-
-<p>
-
-Username
-
-</p>
-
-<strong>
-
-juan
-
-</strong>
-
-<hr class="mt-2 mb-2">
-
-<p>
-
-Role
-
-</p>
-
-<span class="badge badge-success">
-
-Resident
-
-</span>
-
-</div>
-
-</div>
-
-<div class="mt-4 text-center">
-
-<p>
-
-Don't have an account?
-
-</p>
-
-<a
-
-href="#"
-
-class="btn btn-outline mt-2">
-
-Request Registration
-
-</a>
-
-</div>
-
-</div>
-
-<div class="hero-card">
-
-<h2>
-
-Smart Gate Management System
-
-</h2>
-
-<p class="mt-3">
-
-A next-generation subdivision access control platform
-designed to automate entry and exit using RFID,
-AI-powered license plate recognition,
-visitor booking,
-and real-time monitoring.
-
-</p>
-
-<div class="quick-actions mt-4">
-
-<div class="action-card">
-
-<i class="bi bi-credit-card-2-front-fill"></i>
-
-<h4>
-
-RFID Authentication
-
-</h4>
-
-<p>
-
-Fast resident access using RFID cards
-and windshield stickers.
-
-</p>
-
-</div>
-
-<div class="action-card">
-
-<i class="bi bi-camera-video-fill"></i>
-
-<h4>
-
-AI Plate Recognition
-
-</h4>
-
-<p>
-
-Automatic vehicle recognition
-through IP cameras.
-
-</p>
-
-</div>
-
-<div class="action-card">
-
-<i class="bi bi-person-vcard-fill"></i>
-
-<h4>
-
-Visitor Booking
-
-</h4>
-
-<p>
-
-Residents can pre-register
-their visitors before arrival.
-
-</p>
-
-</div>
-
-<div class="action-card">
-
-<i class="bi bi-shield-lock-fill"></i>
-
-<h4>
-
-Secure Access
-
-</h4>
-
-<p>
-
-Every gate transaction is logged
-with timestamps,
-photos,
-and verification data.
-
-</p>
-
-</div>
-
-</div>
-
-</div>
-<div class="mt-5 text-center">
-
-<hr class="mb-4">
-
-<p>
-
-Demo Credentials
-
-</p>
-
-<div class="dashboard-grid mt-3">
-
-<div class="card">
-
-<h4>
-
-Administrator
-
-</h4>
-
-<p>
-
-Username
-
-</p>
-
-<strong>
-
-admin
-
-</strong>
-
-<p class="mt-2">
-
-Password
-
-</p>
-
-<strong>
-
-admin123
-
-</strong>
-
-</div>
-
-<div class="card">
-
-<h4>
-
-Resident
-
-</h4>
-
-<p>
-
-Username
-
-</p>
-
-<strong>
-
-juan
-
-</strong>
-
-<p class="mt-2">
-
-Password
-
-</p>
-
-<strong>
-
-juan123
-
-</strong>
-
-</div>
-
-</div>
-
-<p class="mt-4">
-
-© <?=date('Y')?> Smart Gate Management System
-
-</p>
-
-<small>
-
-RFID Access • AI Plate Recognition • Visitor Booking
-
-</small>
-
-</div>
-
-</div>
-
-</div>
-
-<?php
-
-require_once __DIR__.'/includes/footer.php';
-
-?>
+<?php require_once __DIR__ . '/includes/footer.php'; ?>

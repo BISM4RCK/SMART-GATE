@@ -2,19 +2,22 @@
 require_once __DIR__ . '/../includes/functions.php';
 require_login();
 $user = current_user();
-if (($user['role'] ?? '') !== 'guard') redirect('../dashboard.php');
-$pageTitle = 'Gate Logs';
+if (($user['role'] ?? '') !== 'resident') redirect('../dashboard.php');
+$pageTitle = 'Resident History';
 require_once __DIR__ . '/../includes/header.php';
-$stmt = db()->query("SELECT * FROM gate_logs ORDER BY created_at DESC");
+$resident = resident_record((int)$user['id']);
+$residentId = $resident['id'] ?? 0;
+$stmt = db()->prepare("SELECT * FROM gate_logs WHERE resident_id = ? ORDER BY created_at DESC");
+$stmt->execute([$residentId]);
 $logs = $stmt->fetchAll();
 ?>
 <div class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-4">
     <div>
-        <span class="gh-badge mb-2"><i class="bi bi-journal-text"></i> Logs</span>
-        <h2 class="gh-section-title mb-1">Gate activity log</h2>
-        <div class="gh-muted">A minimal list of recent gate events.</div>
+        <span class="gh-badge mb-2"><i class="bi bi-clock-history"></i> History</span>
+        <h2 class="gh-section-title mb-1">Recent activity</h2>
+        <div class="gh-muted">A simple history view for quick reference.</div>
     </div>
-    <a class="btn gh-gold rounded-pill" href="<?= e(url('guard/dashboard.php')) ?>">Back to dashboard</a>
+    <a class="btn gh-gold rounded-pill" href="<?= e(url('resident/dashboard.php')) ?>">Back to dashboard</a>
 </div>
 
 <div class="gh-card p-4">

@@ -1,9 +1,5 @@
 <?php
-require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/_bootstrap.php';
 
-$user = current_user();
-if ($user) {
-    audit_log((int)$user['id'], 'logout', 'authentication', 'User logged out.');
-}
 logout_user();
-redirect('index.php');
+json_response(['ok' => true, 'message' => 'Logged out']);
