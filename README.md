@@ -24,5 +24,9 @@ Minimal Bootstrap 5 web app for a gated community.
 
 Password: `Password123!`
 
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
 ## Authors
 BISM4RCK/KUN3H0
