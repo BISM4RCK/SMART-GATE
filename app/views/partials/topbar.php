@@ -46,5 +46,4 @@ $user = current_user();
         <?php endif; ?>
     </div>
 </nav>
-/* BISM4RCK/KUN3H0 2026 */
-// BISM4RCK/KUN3H0 2026
+<?php /* BISM4RCK/KUN3H0 2026 */ ?>

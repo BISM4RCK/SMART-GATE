@@ -45,9 +45,9 @@ $current = trim(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?? '');
         </div>
         <div class="mt-3 d-grid gap-2">
             <a class="btn btn-sm gh-btn-soft" href="<?= e(dashboard_url($user)) ?>"><i class="bi bi-arrow-return-left me-2"></i>Back to Dashboard</a>
-            <a class="btn btn-sm gh-btn-outline" href="<?= e(url('logout.php')) ?>"><i class="bi bi-box-arrow-right me-2"></i>Logout</a>
+            <a class="btn btn-sm gh-btn-outline" href="<?= e(url('logout.php')) ?>
+"><i class="bi bi-box-arrow-right me-2"></i>Logout</a>
         </div>
     </div>
 </aside>
-/* BISM4RCK/KUN3H0 2026 */
-// BISM4RCK/KUN3H0 2026
+<?php /* BISM4RCK/KUN3H0 2026 */ ?>

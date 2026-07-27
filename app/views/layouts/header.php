@@ -30,5 +30,4 @@ $unreadCount = $user ? unread_notifications_count((int)$user['id']) : 0;
     <div class="container-fluid px-3 px-lg-4 py-4">
 <?php endif; ?>
 <?php flash(); ?>
-/* BISM4RCK/KUN3H0 2026 */
-// BISM4RCK/KUN3H0 2026
+<?php /* BISM4RCK/KUN3H0 2026 */ ?>
