@@ -1,32 +1,46 @@
 # GOLDEN HOMES Subdivision
 
-Minimal Bootstrap 5 web app for a gated community.
+A lightweight MVC PHP system for a gated community, built for XAMPP and MySQL.
 
-## Included
+## What it does
 - Landing page with only **Login** and **Visitor**
-- Working notifications
-- Trouble-ticket system for residents and admins
-- House-number visitor request flow
-- Resident, guard, and admin dashboards
-- `config/` and `api/` folders
-- Import-ready MySQL schema
+- Login routes by account role automatically
+- Resident dashboard
+- Guard dashboard
+- Admin dashboard
+- Visitor requests using house number
+- Ticket / trouble report system
+- Notifications system
+- Gate logs
+- ESP32 endpoint for RFID + plate logging with vehicle/plate photos
 
 ## Setup
-1. Copy to `C:\xampp\htdocs\smart-gate`
+1. Put the folder in `C:\xampp\htdocs\smart-gate`
 2. Start Apache and MySQL in XAMPP
-3. Import `database/smart_gate.sql`
-4. Open `http://localhost/smart-gate/`
+3. Import `database/smart_gate.sql` in phpMyAdmin
+4. Open `http://YOUR-PC-IP/smart-gate/` or `http://localhost/smart-gate/`
 
-## Demo logins
+## Demo Accounts
 - resident@goldenhomes.local
 - guard@goldenhomes.local
 - admin@goldenhomes.local
 
-Password: `Password123!`
+Password:
+- `Password123!`
 
-## License
+## ESP32 Endpoint
+POST to:
+- `/smart-gate/api/esp32/log_access.php`
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Accepted fields:
+- `rfid_uid`
+- `plate_number`
+- `event_type`
+- `source_device`
+- `manual_override`
+- `plate_photo` (file)
+- `vehicle_photo` (file)
 
-## Authors
-BISM4RCK/KUN3H0
+## BISM4RCK/KUN3H0 2026
+
+<!-- BISM4RCK/KUN3H0 2026 -->

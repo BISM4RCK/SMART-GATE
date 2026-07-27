@@ -1,3 +1,5 @@
+-- BISM4RCK/KUN3H0 2026
+-- BISM4RCK/KUN3H0 2026
 CREATE DATABASE IF NOT EXISTS smart_gate
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
@@ -152,24 +154,25 @@ CREATE TABLE bookings (
 
 CREATE TABLE gate_logs (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    booking_id BIGINT UNSIGNED NULL,
     resident_id BIGINT UNSIGNED NULL,
-    guard_id BIGINT UNSIGNED NULL,
     vehicle_id BIGINT UNSIGNED NULL,
-    event_type ENUM('entry', 'exit', 'manual_open', 'qr_scan', 'rfid_scan', 'walk_in') NOT NULL,
-    person_name VARCHAR(150) NULL,
-    plate_number VARCHAR(30) NULL,
-    qr_reference VARCHAR(120) NULL,
+    visitor_request_id BIGINT UNSIGNED NULL,
+    guard_id BIGINT UNSIGNED NULL,
     rfid_uid VARCHAR(100) NULL,
+    plate_number VARCHAR(30) NULL,
+    event_type ENUM('entry', 'exit', 'manual_open', 'rfid_scan', 'plate_scan', 'combined_scan') NOT NULL,
     gate_status ENUM('approved', 'denied', 'pending', 'manual_override') NOT NULL DEFAULT 'pending',
+    source_device VARCHAR(100) NULL,
+    plate_photo_path VARCHAR(255) NULL,
+    vehicle_photo_path VARCHAR(255) NULL,
+    raw_payload LONGTEXT NULL,
     log_notes VARCHAR(255) NULL,
-    captured_image_path VARCHAR(255) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_gate_logs_booking FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE SET NULL,
     CONSTRAINT fk_gate_logs_resident FOREIGN KEY (resident_id) REFERENCES residents(id) ON DELETE SET NULL,
-    CONSTRAINT fk_gate_logs_guard FOREIGN KEY (guard_id) REFERENCES guards(id) ON DELETE SET NULL,
-    CONSTRAINT fk_gate_logs_vehicle FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE SET NULL
+    CONSTRAINT fk_gate_logs_vehicle FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE SET NULL,
+    CONSTRAINT fk_gate_logs_guard FOREIGN KEY (guard_id) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_gate_logs_visitor_request FOREIGN KEY (visitor_request_id) REFERENCES visitor_requests(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 CREATE TABLE notifications (
@@ -242,9 +245,9 @@ CREATE INDEX idx_notifications_is_read ON notifications(is_read);
 CREATE INDEX idx_concerns_status ON concerns(status);
 
 INSERT INTO users (full_name, email, password, role, status) VALUES
-('Golden Resident', 'resident@goldenhomes.local', '$2y$12$ZifHz0It8Kg/2kG/N8jrT.fHykuPUzRFYBQPhH9T1sq2dunbVethi', 'resident', 'active'),
-('Gate Guard', 'guard@goldenhomes.local', '$2y$12$DpvWHV2XpE2SvUAVorNt5.ZHqi5F1tQcHJdP6MB/tj7YoGxOUZXCq', 'guard', 'active'),
-('Subdivision Admin', 'admin@goldenhomes.local', '$2y$12$pyXcwzFGJfKoK/xcFkybJ.Vtw7tiPWaakRleU1pEdFBXGsFWmF816', 'admin', 'active');
+('Golden Resident', 'resident@goldenhomes.local', '$2y$12$8FfPm6d09mvevtK3as10UeLq3X.EX0Xv05vsgTX0kIg5POU7XuE/6', 'resident', 'active'),
+('Gate Guard', 'guard@goldenhomes.local', '$2y$12$8YEEawRXeKk19/k1fwZMtewlsjvOZN4x0VgvfOt5YEtcJWOeG3PAW', 'guard', 'active'),
+('Subdivision Admin', 'admin@goldenhomes.local', '$2y$12$HiPq2.RM1PGErw7L0t7lNuGwUzh5ESj5XFWt.UWe0QG4VEeJe6Mzi', 'admin', 'active');
 
 SET @resident_user_id = (SELECT id FROM users WHERE email='resident@goldenhomes.local' LIMIT 1);
 SET @guard_user_id = (SELECT id FROM users WHERE email='guard@goldenhomes.local' LIMIT 1);
@@ -265,6 +268,9 @@ INSERT INTO vehicles (resident_id, plate_number, vehicle_type, brand, model, col
 (@resident_id, 'ABC 1234', 'car', 'Toyota', 'Vios', 'White'),
 (@resident_id, 'XYZ 7788', 'motorcycle', 'Honda', 'Click', 'Black');
 
+INSERT INTO rfid_tags (vehicle_id, uid, tag_type, issued_at, status)
+VALUES ((SELECT id FROM vehicles WHERE plate_number='ABC 1234' LIMIT 1), 'RFID-ABC1234', 'windshield', NOW(), 'active');
+
 INSERT INTO visitor_requests (
     resident_id, house_number, visitor_name, contact_number, plate_number,
     vehicle_type, purpose_of_visit, status, requested_visit_date, requested_arrival_time, qr_reference
@@ -278,4 +284,6 @@ VALUES (@resident_id, 'Golden Resident', 'resident', '12-A', 'Streetlight is fli
 INSERT INTO notifications (user_id, title, message, is_read)
 VALUES
 (@resident_user_id, 'Visitor pending', 'You have a pending visitor request for House 12-A.', 0),
-(@admin_user_id, 'New concern', 'A resident submitted a new concern.', 0);
+(@admin_user_id, 'New concern', 'A resident submitted a new concern.', 0),
+(@guard_user_id, 'Guard notice', 'Your dashboard is ready.', 0);
+-- BISM4RCK/KUN3H0 2026

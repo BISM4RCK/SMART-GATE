@@ -1,6 +1,7 @@
 <?php
-require_once __DIR__ . '/includes/functions.php';
-logout_user();
-session_regenerate_id(true);
-flash_set('success', 'You have been logged out.');
-redirect('index.php');
+/* BISM4RCK/KUN3H0 2026 */
+// BISM4RCK/KUN3H0 2026
+require_once __DIR__ . '/app/bootstrap.php';
+(new AuthController())->logout();
+/* BISM4RCK/KUN3H0 2026 */
+// BISM4RCK/KUN3H0 2026

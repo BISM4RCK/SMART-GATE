@@ -1,0 +1,32 @@
+<?php
+/* BISM4RCK/KUN3H0 2026 */
+// BISM4RCK/KUN3H0 2026
+include app_path('views/layouts/header.php');
+?>
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="mb-0">Notifications</h2>
+        <a class="btn btn-outline-secondary rounded-pill" href="<?= e(dashboard_url()) ?>">Back</a>
+    </div>
+
+    <div class="d-grid gap-3">
+        <?php foreach ($notifications as $n): ?>
+            <div class="gh-card p-4" id="n-<?= (int)$n['id'] ?>">
+                <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                    <div class="fw-semibold"><?= e($n['title']) ?></div>
+                    <span class="badge rounded-pill <?= e($n['is_read'] ? 'bg-success-subtle text-success-emphasis' : 'bg-warning-subtle text-warning-emphasis') ?>"><?= $n['is_read'] ? 'Read' : 'Unread' ?></span>
+                </div>
+                <div class="small text-muted mt-1"><?= e($n['created_at']) ?></div>
+                <div class="mt-2"><?= e($n['message']) ?></div>
+                <?php if (!$n['is_read']): ?>
+                    <a class="btn btn-sm gh-primary rounded-pill mt-3" href="<?= e(url('notifications.php?read=' . (int)$n['id'] . '&back=' . urlencode($_SERVER['REQUEST_URI'] ?? 'notifications.php'))) ?>">Mark as read</a>
+                <?php endif; ?>
+            </div>
+        <?php endforeach; ?>
+        <?php if (empty($notifications)): ?><div class="text-muted">No notifications yet.</div><?php endif; ?>
+    </div>
+</div>
+<?php
+include app_path('views/layouts/footer.php');
+/* BISM4RCK/KUN3H0 2026 */
+// BISM4RCK/KUN3H0 2026

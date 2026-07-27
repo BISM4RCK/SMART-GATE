@@ -1,66 +1,28 @@
-# =========================
-# Environment / secrets
-# =========================
+# BISM4RCK/KUN3H0 2026
+# BISM4RCK/KUN3H0 2026
 .env
 .env.*
-config/local.php
-config/db.php
-config/database.php
-
-# =========================
-# Dependencies
-# =========================
-/vendor/
-/node_modules/
-
-# =========================
-# Build output
-# =========================
-/dist/
-/build/
-/.next/
-/out/
-
-# =========================
-# Uploads / generated files
-# =========================
-/uploads/*
-!/uploads/.gitkeep
-
-/storage/*
-!/storage/.gitkeep
-
-/tmp/
+vendor/
+node_modules/
+uploads/*
+!uploads/.gitkeep
+storage/*
+!storage/.gitkeep
+tmp/
 temp/
 cache/
 logs/
 *.log
-
-# =========================
-# Database / local data
-# =========================
 *.sqlite
 *.sqlite3
 *.db
-
-# =========================
-# OS junk
-# =========================
 .DS_Store
 Thumbs.db
 desktop.ini
-
-# =========================
-# IDE / editor files
-# =========================
 .vscode/
 .idea/
 *.sublime-workspace
 *.sublime-project
-
-# =========================
-# Backups / archives
-# =========================
 *.zip
 *.rar
 *.7z
@@ -68,16 +30,9 @@ desktop.ini
 *.gz
 *.bak
 *.old
-
-# =========================
-# XAMPP / local dev
-# =========================
 php_error.log
 php.ini
-
-# =========================
-# Optional generated exports
-# =========================
-/exports/
-/reports/generated/
-/public/reports/
+exports/
+reports/generated/
+public/reports/
+# BISM4RCK/KUN3H0 2026
