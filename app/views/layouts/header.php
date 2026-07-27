@@ -16,7 +16,7 @@ $unreadCount = $user ? unread_notifications_count((int)$user['id']) : 0;
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="<?= e(asset('css/app.css')) ?>" rel="stylesheet">
+    <link rel="stylesheet" href="<?= asset('css/app.css') ?>">
 </head>
 <body class="<?= $user ? 'gh-app-body' : 'gh-landing-body' ?>">
 <?php include app_path('views/partials/topbar.php'); ?>
@@ -30,4 +30,4 @@ $unreadCount = $user ? unread_notifications_count((int)$user['id']) : 0;
     <div class="container-fluid px-3 px-lg-4 py-4">
 <?php endif; ?>
 <?php flash(); ?>
-<?php /* BISM4RCK/KUN3H0 2026 */ ?>
+

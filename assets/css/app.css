@@ -64,5 +64,20 @@ label{font-weight:600;margin-bottom:.35rem}
 .gh-table thead th{background:#fafafa;border-bottom:1px solid var(--gh-border)!important}
 .gh-table tbody tr:hover{background:#fcfcfc}
 .gh-footer{padding:1rem 0;color:var(--gh-muted)}
+.gh-landing-card h2,
+.gh-landing-card h1 {
+  font-size: 4rem;
+  line-height: 1;
+}
+
+.gh-landing-card p,
+.gh-landing-card .text-muted {
+  font-size: 2.25rem;
+}
+
+.gh-big-btn {
+  font-size: 2.15rem;
+  padding: 1.15rem 1.8rem;
+}
 @media (max-width: 991.98px){.gh-app-shell{flex-direction:column}.gh-sidebar{width:100%;height:auto;position:relative;top:auto}}
 /* BISM4RCK/KUN3H0 2026 */

@@ -9,14 +9,12 @@ date_default_timezone_set('Asia/Manila');
 define('APP_NAME', 'GOLDEN HOMES Subdivision');
 define('APP_SHORT', 'GOLDEN HOMES');
 
-$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
-$host = $_SERVER['HTTP_HOST'] ?? 'localhost';
 $script = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/'));
 $basePath = rtrim($script, '/');
 if ($basePath === '/' || $basePath === '.') {
     $basePath = '';
 }
-define('BASE_URL', $scheme . $host . $basePath);
+define('BASE_URL', $basePath);
 
 define('DB_HOST', '127.0.0.1');
 define('DB_PORT', '3306');

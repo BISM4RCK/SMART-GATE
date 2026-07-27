@@ -145,9 +145,9 @@ function url(string $path = ''): string
     return rtrim(BASE_URL, '/') . '/' . ltrim($path, '/');
 }
 
-function asset(string $path = ''): string
+function asset($path = '')
 {
-    return url('assets/' . ltrim($path, '/'));
+    return '/smart-gate/assets/' . ltrim($path, '/');
 }
 
 function redirect(string $path): void

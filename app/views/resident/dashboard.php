@@ -10,8 +10,8 @@ include app_path('views/layouts/header.php');
             <div class="text-muted">House <?= e($resident['house_number'] ?? '') ?></div>
         </div>
         <div class="d-flex gap-2">
-            <a class="btn gh-primary rounded-pill" href="<?= e(url('resident/requests.php')) ?>">Requests</a>
-            <a class="btn gh-gold rounded-pill" href="<?= e(url('resident/tickets.php')) ?>">Tickets</a>
+            <a class="btn gh-primary rounded-pill" href="<?= e(url('requests.php')) ?>">Requests</a>
+            <a class="btn gh-gold rounded-pill" href="<?= e(url('tickets.php')) ?>">Tickets</a>
         </div>
     </div>
 
@@ -51,9 +51,9 @@ include app_path('views/layouts/header.php');
             <div class="gh-card p-4 h-100">
                 <h5 class="mb-3">Quick links</h5>
                 <div class="d-grid gap-2">
-                    <a class="btn gh-btn-soft text-start" href="<?= e(url('resident/vehicles.php')) ?>"><i class="bi bi-car-front me-2"></i>Vehicles</a>
-                    <a class="btn gh-btn-soft text-start" href="<?= e(url('resident/requests.php')) ?>"><i class="bi bi-person-lines-fill me-2"></i>Requests</a>
-                    <a class="btn gh-btn-soft text-start" href="<?= e(url('resident/tickets.php')) ?>"><i class="bi bi-chat-left-text me-2"></i>Tickets</a>
+                    <a class="btn gh-btn-soft text-start" href="<?= e(url('vehicles.php')) ?>"><i class="bi bi-car-front me-2"></i>Vehicles</a>
+                    <a class="btn gh-btn-soft text-start" href="<?= e(url('requests.php')) ?>"><i class="bi bi-person-lines-fill me-2"></i>Requests</a>
+                    <a class="btn gh-btn-soft text-start" href="<?= e(url('tickets.php')) ?>"><i class="bi bi-chat-left-text me-2"></i>Tickets</a>
                     <a class="btn gh-btn-soft text-start" href="<?= e(url('notifications.php')) ?>"><i class="bi bi-bell me-2"></i>Notifications</a>
                 </div>
             </div>

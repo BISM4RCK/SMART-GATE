@@ -32,7 +32,7 @@ class AuthController
         }
 
         flash_set('success', 'Welcome back, ' . $user['name'] . '.');
-        redirect('dashboard.php');
+        redirect(dashboard_url($user));
     }
 
     public function logout(): void
