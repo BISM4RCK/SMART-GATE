@@ -133,19 +133,7 @@ function e($value): string
 
 function url(string $path = ''): string
 {
-    $path = ltrim($path, '/');
-    return '/smart-gate' . ($path !== '' ? '/' . $path : '');
-}
-
-function redirect(string $path): void
-{
-    if (preg_match('~^https?://~i', $path) || str_starts_with($path, '/')) {
-        header('Location: ' . $path);
-        exit;
-    }
-
-    header('Location: ' . url($path));
-    exit;
+    return rtrim(BASE_URL, '/') . '/' . ltrim($path, '/');
 }
 
 function asset(string $path = ''): string
@@ -153,6 +141,11 @@ function asset(string $path = ''): string
     return url('assets/' . ltrim($path, '/'));
 }
 
+function redirect(string $path): void
+{
+    header('Location: ' . url($path));
+    exit;
+}
 
 function flash_set(string $type, string $message): void
 {
@@ -189,12 +182,11 @@ function require_role(array|string $roles): void
 function dashboard_url(?array $user = null): string
 {
     $user ??= current_user();
-
     return match ($user['role'] ?? '') {
-        'resident' => '/smart-gate/resident/dashboard.php',
-        'guard' => '/smart-gate/guard/dashboard.php',
-        'admin' => '/smart-gate/admin/dashboard.php',
-        default => '/smart-gate/index.php',
+        'resident' => url('resident/dashboard.php'),
+        'guard' => url('guard/dashboard.php'),
+        'admin' => url('admin/dashboard.php'),
+        default => url('index.php'),
     };
 }
 
