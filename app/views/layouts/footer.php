@@ -10,7 +10,7 @@
     <div class="container-fluid px-3 px-lg-4">
         <div class="d-flex flex-column flex-md-row justify-content-between gap-2 small">
             <span>© <?= date('Y') ?> <?= e(APP_NAME) ?></span>
-            <span>Works on desktop and mobile browsers on the same network.</span>
+            <span>BISM4RCK/KUN3H0 2026. All rights reserved.</span>
         </div>
     </div>
 </footer>

@@ -6,23 +6,23 @@ $user = current_user();
 $role = $user['role'] ?? '';
 $links = match ($role) {
     'resident' => [
-        ['Dashboard', 'dashboard.php', 'bi-speedometer2'],
-        ['Requests', 'requests.php', 'bi-person-lines-fill'],
-        ['Vehicles', 'vehicles.php', 'bi-car-front'],
-        ['Tickets', 'tickets.php', 'bi-chat-left-text'],
+        ['Dashboard', 'resident/dashboard.php', 'bi-speedometer2'],
+        ['Requests', 'resident/requests.php', 'bi-person-lines-fill'],
+        ['Vehicles', 'resident/vehicles.php', 'bi-car-front'],
+        ['Tickets', 'resident/tickets.php', 'bi-chat-left-text'],
         ['Notifications', 'notifications.php', 'bi-bell'],
     ],
     'guard' => [
-        ['Dashboard', 'dashboard.php', 'bi-speedometer2'],
-        ['Quick Scan', 'scan.php', 'bi-qr-code-scan'],
-        ['Logs', 'logs.php', 'bi-journal-text'],
+        ['Dashboard', 'guard/dashboard.php', 'bi-speedometer2'],
+        ['Quick Scan', 'guard/scan.php', 'bi-qr-code-scan'],
+        ['Logs', 'guard/logs.php', 'bi-journal-text'],
         ['Notifications', 'notifications.php', 'bi-bell'],
     ],
     'admin' => [
-        ['Dashboard', 'dashboard.php', 'bi-speedometer2'],
-        ['Tickets', 'tickets.php', 'bi-chat-left-text'],
-        ['Users', 'users.php', 'bi-people'],
-        ['Logs', 'logs.php', 'bi-journal-text'],
+        ['Dashboard', 'admin/dashboard.php', 'bi-speedometer2'],
+        ['Tickets', 'admin/tickets.php', 'bi-chat-left-text'],
+        ['Users', 'admin/users.php', 'bi-people'],
+        ['Logs', 'admin/logs.php', 'bi-journal-text'],
         ['Notifications', 'notifications.php', 'bi-bell'],
     ],
     default => []

@@ -7,6 +7,7 @@ include app_path('views/layouts/header.php');
     <div class="gh-card p-4">
         <h2 class="mb-2">Settings</h2>
         <p class="text-muted mb-0">Reserved for future configuration.</p>
+        <a class="btn btn-outline-secondary rounded-pill" href="<?= e(url('admin/dashboard.php')) ?>">Back</a>
     </div>
 </div>
 <?php

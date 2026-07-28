@@ -4,6 +4,7 @@
 /* BISM4RCK/KUN3H0 2026 */
 $user = current_user();
 ?>
+
 <nav class="navbar navbar-expand-lg navbar-dark gh-navbar border-bottom border-white border-opacity-10">
     <div class="container-fluid px-3 px-lg-4">
         <a class="navbar-brand fw-semibold d-flex align-items-center gap-2" href="<?= e($user ? dashboard_url($user) : url('index.php')) ?>">
