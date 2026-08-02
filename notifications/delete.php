@@ -1,55 +1,33 @@
 <?php
 /* BISM4RCK/KUN3H0 2026 */
-require_once __DIR__ . '/../app/Core.php';
-require_once __DIR__ . '/../app/Models.php';
+require_once __DIR__ . '/../app/bootstrap.php';
 /* BISM4RCK/KUN3H0 2026 */
 
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    session_start();
-}
+require_login();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
     exit('Method Not Allowed');
 }
 
-$user = $_SESSION['user'] ?? null;
-if (!$user || empty($user['id'])) {
-    http_response_code(401);
-    exit('Unauthorized');
+csrf_validate();
+
+$user = current_user();
+$notificationId = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
+
+if (!$notificationId) {
+    flash_set('danger', 'Invalid notification.');
+    redirect('notifications.php');
 }
 
-$id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
-if (!$id) {
-    http_response_code(400);
-    exit('Invalid notification ID');
-}
+$deleted = NotificationModel::delete((int)$notificationId, (int)$user['id']);
 
-$csrf = $_POST['csrf_token'] ?? '';
-if (function_exists('verify_csrf')) {
-    if (!verify_csrf($csrf)) {
-        http_response_code(403);
-        exit('Invalid CSRF token');
-    }
-}
-
-$deleted = false;
-if (class_exists('NotificationModel') && method_exists('NotificationModel', 'delete')) {
-    $deleted = NotificationModel::delete($id, (int)$user['id']);
+if ($deleted) {
+    flash_set('success', 'Notification deleted.');
 } else {
-    $pdo = db();
-    $stmt = $pdo->prepare(
-        "DELETE FROM notifications WHERE id = :id AND user_id = :user_id"
-    );
-    $stmt->execute([
-        ':id' => $id,
-        ':user_id' => (int)$user['id'],
-    ]);
-    $deleted = $stmt->rowCount() > 0;
+    flash_set('warning', 'Notification could not be deleted.');
 }
 
-$back = $_SERVER['HTTP_REFERER'] ?? '../index.php';
-header('Location: ' . $back);
-exit;
+redirect('notifications.php');
 
 /* BISM4RCK/KUN3H0 2026 */
