@@ -242,6 +242,25 @@ class NotificationModel
         $stmt = Database::pdo()->prepare("UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0");
         return $stmt->execute([$userId]);
     }
+
+
+    /**
+     * Delete a notification belonging to a user.
+     * BISM4RCK/KUN3H0 2026
+     */
+    public static function delete(int $notificationId, int $userId): bool
+    {
+        $pdo = db();
+        $stmt = $pdo->prepare(
+            "DELETE FROM notifications WHERE id = :id AND user_id = :user_id"
+        );
+        $stmt->execute([
+            ':id' => $notificationId,
+            ':user_id' => $userId,
+        ]);
+        return $stmt->rowCount() > 0;
+    }
+
 }
 
 class TicketModel
@@ -477,48 +496,23 @@ class GateLogModel
 }
 
 
-class BlacklistModel
-{
-    public static function all(): array
-    {
-        return Database::pdo()->query("SELECT b.*, u.full_name AS created_by_name FROM blacklist b LEFT JOIN users u ON u.id = b.created_by ORDER BY b.created_at DESC")->fetchAll();
-    }
-
-    public static function add(array $data, int $createdBy): int
-    {
-        $stmt = Database::pdo()->prepare("INSERT INTO blacklist (resident_id, visitor_name, plate_number, reason, status, start_date, end_date, created_by) VALUES (?, ?, ?, ?, 'active', ?, ?, ?)");
-        $stmt->execute([
-            !empty($data['resident_id']) ? (int)$data['resident_id'] : null,
-            trim($data['visitor_name'] ?? '') ?: null,
-            strtoupper(trim($data['plate_number'] ?? '')) ?: null,
-            trim($data['reason'] ?? ''),
-            !empty($data['start_date']) ? $data['start_date'] : null,
-            !empty($data['end_date']) ? $data['end_date'] : null,
-            $createdBy,
-        ]);
-        return (int)Database::pdo()->lastInsertId();
-    }
-
-    public static function remove(int $id): bool
-    {
-        $stmt = Database::pdo()->prepare("DELETE FROM blacklist WHERE id = ?");
-        $stmt->execute([$id]);
-        return $stmt->rowCount() > 0;
-    }
-
-    public static function setStatus(int $id, string $status): bool
-    {
-        $stmt = Database::pdo()->prepare("UPDATE blacklist SET status = ? WHERE id = ?");
-        return $stmt->execute([$status, $id]);
-    }
-
-    public static function isActivePlate(string $plate): bool
-    {
-        $stmt = Database::pdo()->prepare("SELECT COUNT(*) c FROM blacklist WHERE plate_number = ? AND status = 'active' AND (start_date IS NULL OR start_date <= CURDATE()) AND (end_date IS NULL OR end_date >= CURDATE())");
-        $stmt->execute([strtoupper(trim($plate))]);
-        return (int)($stmt->fetch()['c'] ?? 0) > 0;
-    }
-}
-
 /* BISM4RCK/KUN3H0 2026 */
 // BISM4RCK/KUN3H0 2026
+
+
+<?php
+/* BISM4RCK/KUN3H0 2026 */
+if (!function_exists('notification_delete_button')) {
+    function notification_delete_button($notificationId): string
+    {
+        $csrf = function_exists('csrf_token') ? csrf_token() : '';
+        $id = (int)$notificationId;
+        return '<form method="post" action="' . e(url('notifications/delete.php')) . '" class="d-inline ms-2" onsubmit="return confirm(\'Delete this notification?\');">'
+             . '<input type="hidden" name="id" value="' . $id . '">'
+             . '<input type="hidden" name="csrf_token" value="' . e($csrf) . '">'
+             . '<button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>'
+             . '</form>';
+    }
+}
+/* BISM4RCK/KUN3H0 2026 */
+?>
