@@ -13,7 +13,7 @@ include app_path('views/layouts/header.php');
         <div class="col-lg-5">
             <div class="gh-card p-4">
                 <h5 class="mb-3">Create ticket</h5>
-                <form method="post" action="<?= e(url('resident/tickets.php')) ?>" class="d-grid gap-3">
+                <form method="post" action="<?= e(url('resident/tickets.php')) ?>" class="d-grid gap-3"><?= csrf_field() ?>
                     <div><label>Subject</label><input class="form-control" name="subject" required></div>
                     <div><label>Message</label><textarea class="form-control" name="message" rows="7" required></textarea></div>
                     <button class="btn gh-primary rounded-pill" type="submit">Send</button>

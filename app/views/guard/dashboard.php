@@ -51,6 +51,7 @@ include app_path('views/layouts/header.php');
                 <div class="d-grid gap-2">
                     <a class="btn gh-btn-soft text-start" href="<?= e(url('guard/scan.php')) ?>"><i class="bi bi-qr-code-scan me-2"></i>Quick Scan</a>
                     <a class="btn gh-btn-soft text-start" href="<?= e(url('guard/logs.php')) ?>"><i class="bi bi-journal-text me-2"></i>Logs</a>
+                    <a class="btn gh-btn-soft text-start" href="<?= e(url('guard/blacklist.php')) ?>"><i class="bi bi-slash-circle me-2"></i>Vehicle Blacklist</a>
                     <a class="btn gh-btn-soft text-start" href="<?= e(url('notifications.php')) ?>"><i class="bi bi-bell me-2"></i>Notifications</a>
                     <a class="btn gh-btn-soft text-start" href="<?= e(url('logout.php')) ?>"><i class="bi bi-box-arrow-right me-2"></i>Logout</a>
                 </div>

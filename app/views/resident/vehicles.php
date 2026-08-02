@@ -13,7 +13,7 @@ include app_path('views/layouts/header.php');
         <div class="col-lg-5">
             <div class="gh-card p-4">
                 <h5 class="mb-3">Add vehicle</h5>
-                <form method="post" action="<?= e(url('resident/vehicles.php')) ?>" class="d-grid gap-3">
+                <form method="post" action="<?= e(url('resident/vehicles.php')) ?>" class="d-grid gap-3"><?= csrf_field() ?>
                     <div><label>Plate</label><input class="form-control" name="plate_number" required></div>
                     <div>
                         <label>Type</label>
@@ -39,7 +39,7 @@ include app_path('views/layouts/header.php');
                                     <td><?= e($v['plate_number']) ?></td>
                                     <td><?= e($v['vehicle_type']) ?></td>
                                     <td><?= e($v['color']) ?></td>
-                                    <td><span class="badge rounded-pill <?= e(gate_badge($v['status'])) ?>"><?= e($v['status']) ?></span></td>
+                                    <td><span class="badge rounded-pill <?= e(gate_badge($v['status'])) ?>"><?= e($v['status']) ?></span> <form method="post" action="<?= e(url('resident/vehicles.php')) ?>" class="d-inline" onsubmit="return confirm('Remove this vehicle?')"><?= csrf_field() ?><input type="hidden" name="action" value="delete"><input type="hidden" name="vehicle_id" value="<?= (int)$v['id'] ?>"><button class="btn btn-sm btn-outline-danger ms-2" type="submit">Remove</button></form></td>
                                 </tr>
                             <?php endforeach; ?>
                             <?php if (empty($vehicles)): ?><tr><td colspan="4" class="text-center text-muted py-4">No vehicles yet.</td></tr><?php endif; ?>

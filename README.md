@@ -2,18 +2,6 @@
 
 A lightweight MVC PHP system for a gated community, built for XAMPP and MySQL.
 
-## What it does
-- Landing page with only **Login** and **Visitor**
-- Login routes by account role automatically
-- Resident dashboard
-- Guard dashboard
-- Admin dashboard
-- Visitor requests using house number
-- Ticket / trouble report system
-- Notifications system
-- Gate logs
-- ESP32 endpoint for RFID + plate logging with vehicle/plate photos
-
 ## Setup
 1. Put the folder in `C:\xampp\htdocs\smart-gate`
 2. Start Apache and MySQL in XAMPP
@@ -44,3 +32,4 @@ Accepted fields:
 ## BISM4RCK/KUN3H0 2026
 
 <!-- BISM4RCK/KUN3H0 2026 -->
+

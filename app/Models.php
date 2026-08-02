@@ -1,4 +1,49 @@
 <?php
+
+
+class BlacklistModel
+{
+    public static function all(): array
+    {
+        return Database::pdo()->query("SELECT b.*, u.full_name AS created_by_name FROM blacklist b LEFT JOIN users u ON u.id = b.created_by ORDER BY b.created_at DESC")->fetchAll();
+    }
+
+    public static function add(array $data, int $createdBy): int
+    {
+        $stmt = Database::pdo()->prepare("INSERT INTO blacklist (resident_id, visitor_name, plate_number, reason, status, start_date, end_date, created_by) VALUES (?, ?, ?, ?, 'active', ?, ?, ?)");
+        $stmt->execute([
+            !empty($data['resident_id']) ? (int)$data['resident_id'] : null,
+            trim($data['visitor_name'] ?? '') ?: null,
+            strtoupper(trim($data['plate_number'] ?? '')) ?: null,
+            trim($data['reason'] ?? ''),
+            !empty($data['start_date']) ? $data['start_date'] : null,
+            !empty($data['end_date']) ? $data['end_date'] : null,
+            $createdBy,
+        ]);
+        return (int)Database::pdo()->lastInsertId();
+    }
+
+    public static function remove(int $id): bool
+    {
+        $stmt = Database::pdo()->prepare("DELETE FROM blacklist WHERE id = ?");
+        $stmt->execute([$id]);
+        return $stmt->rowCount() > 0;
+    }
+
+    public static function setStatus(int $id, string $status): bool
+    {
+        $stmt = Database::pdo()->prepare("UPDATE blacklist SET status = ? WHERE id = ?");
+        return $stmt->execute([$status, $id]);
+    }
+
+    public static function isActivePlate(string $plate): bool
+    {
+        $stmt = Database::pdo()->prepare("SELECT COUNT(*) c FROM blacklist WHERE plate_number = ? AND status = 'active' AND (start_date IS NULL OR start_date <= CURDATE()) AND (end_date IS NULL OR end_date >= CURDATE())");
+        $stmt->execute([strtoupper(trim($plate))]);
+        return (int)($stmt->fetch()['c'] ?? 0) > 0;
+    }
+}
+
 /* BISM4RCK/KUN3H0 2026 */
 // BISM4RCK/KUN3H0 2026
 class UserModel
@@ -29,6 +74,18 @@ class UserModel
     {
         $stmt = Database::pdo()->prepare("UPDATE users SET last_login_at = NOW() WHERE id = ?");
         $stmt->execute([$id]);
+    }
+    public static function create(array $data): int
+    {
+        $pdo = Database::pdo();
+        $stmt = $pdo->prepare("INSERT INTO users (full_name, email, password, role, status) VALUES (?, ?, ?, ?, 'active')");
+        $stmt->execute([$data['full_name'], $data['email'], password_hash($data['password'], PASSWORD_DEFAULT), $data['role']]);
+        return (int)$pdo->lastInsertId();
+    }
+    public static function delete(int $id): bool
+    {
+        $stmt = Database::pdo()->prepare("DELETE FROM users WHERE id = ?");
+        return $stmt->execute([$id]);
     }
 }
 
@@ -107,6 +164,31 @@ class VehicleModel
         $stmt->execute([$plate]);
         return $stmt->fetch() ?: null;
     }
+    public static function delete(int $vehicleId, ?int $residentId = null): bool
+    {
+        if ($residentId !== null) {
+            $stmt = Database::pdo()->prepare("DELETE FROM vehicles WHERE id = ? AND resident_id = ?");
+            $stmt->execute([$vehicleId, $residentId]);
+            return $stmt->rowCount() > 0;
+        }
+        $stmt = Database::pdo()->prepare("DELETE FROM vehicles WHERE id = ?");
+        $stmt->execute([$vehicleId]);
+        return $stmt->rowCount() > 0;
+    }
+
+    public static function find(int $id): ?array
+    {
+        $stmt = Database::pdo()->prepare("SELECT * FROM vehicles WHERE id = ? LIMIT 1");
+        $stmt->execute([$id]);
+        return $stmt->fetch() ?: null;
+    }
+
+    public static function update(int $id, string $plate, string $type, string $color = '', string $brand = '', string $model = ''): bool
+    {
+        $stmt = Database::pdo()->prepare("UPDATE vehicles SET plate_number = ?, vehicle_type = ?, color = ?, brand = ?, model = ? WHERE id = ?");
+        return $stmt->execute([$plate, strtolower($type), $color ?: 'N/A', $brand ?: null, $model ?: null, $id]);
+    }
+
     public static function findByRfid(string $rfid): ?array
     {
         $stmt = Database::pdo()->prepare("
@@ -155,6 +237,11 @@ class NotificationModel
         $stmt = Database::pdo()->prepare("UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?");
         return $stmt->execute([$id, $userId]);
     }
+    public static function markAllRead(int $userId): bool
+    {
+        $stmt = Database::pdo()->prepare("UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0");
+        return $stmt->execute([$userId]);
+    }
 }
 
 class TicketModel
@@ -197,6 +284,13 @@ class TicketModel
         ");
         return $stmt->execute([$reply, $adminId, $ticketId]);
     }
+    public static function delete(int $ticketId): bool
+    {
+        $stmt = Database::pdo()->prepare("DELETE FROM concerns WHERE id = ?");
+        $stmt->execute([$ticketId]);
+        return $stmt->rowCount() > 0;
+    }
+
     public static function openCount(): int
     {
         return (int)(Database::pdo()->query("SELECT COUNT(*) c FROM concerns WHERE status = 'open'")->fetch()['c'] ?? 0);
@@ -326,11 +420,12 @@ class GateLogModel
         if ($rfid !== '') $matched = VehicleModel::findByRfid($rfid);
         if (!$matched && $plate !== '') $matched = VehicleModel::findByPlate($plate);
 
+        $blacklisted = $plate !== '' ? BlacklistModel::isActivePlate($plate) : false;
         $residentId = $matched ? (int)$matched['resident_id'] : null;
         $residentUserId = $matched ? (int)$matched['resident_user_id'] : null;
         $vehicleId = $matched['id'] ?? null;
-        $gateStatus = $matched ? 'approved' : 'denied';
-        $notes = $matched ? 'Matched ' . ($rfid !== '' ? 'RFID' : 'plate') : 'No matching resident vehicle found';
+        $gateStatus = $blacklisted ? 'denied' : ($matched ? 'approved' : 'denied');
+        $notes = $blacklisted ? 'Plate is on the active blacklist' : ($matched ? 'Matched ' . ($rfid !== '' ? 'RFID' : 'plate') : 'No matching resident vehicle found');
 
         if ($manual) {
             $gateStatus = 'manual_override';
@@ -380,5 +475,50 @@ class GateLogModel
         return Database::pdo()->query("SELECT * FROM gate_logs ORDER BY created_at DESC")->fetchAll();
     }
 }
+
+
+class BlacklistModel
+{
+    public static function all(): array
+    {
+        return Database::pdo()->query("SELECT b.*, u.full_name AS created_by_name FROM blacklist b LEFT JOIN users u ON u.id = b.created_by ORDER BY b.created_at DESC")->fetchAll();
+    }
+
+    public static function add(array $data, int $createdBy): int
+    {
+        $stmt = Database::pdo()->prepare("INSERT INTO blacklist (resident_id, visitor_name, plate_number, reason, status, start_date, end_date, created_by) VALUES (?, ?, ?, ?, 'active', ?, ?, ?)");
+        $stmt->execute([
+            !empty($data['resident_id']) ? (int)$data['resident_id'] : null,
+            trim($data['visitor_name'] ?? '') ?: null,
+            strtoupper(trim($data['plate_number'] ?? '')) ?: null,
+            trim($data['reason'] ?? ''),
+            !empty($data['start_date']) ? $data['start_date'] : null,
+            !empty($data['end_date']) ? $data['end_date'] : null,
+            $createdBy,
+        ]);
+        return (int)Database::pdo()->lastInsertId();
+    }
+
+    public static function remove(int $id): bool
+    {
+        $stmt = Database::pdo()->prepare("DELETE FROM blacklist WHERE id = ?");
+        $stmt->execute([$id]);
+        return $stmt->rowCount() > 0;
+    }
+
+    public static function setStatus(int $id, string $status): bool
+    {
+        $stmt = Database::pdo()->prepare("UPDATE blacklist SET status = ? WHERE id = ?");
+        return $stmt->execute([$status, $id]);
+    }
+
+    public static function isActivePlate(string $plate): bool
+    {
+        $stmt = Database::pdo()->prepare("SELECT COUNT(*) c FROM blacklist WHERE plate_number = ? AND status = 'active' AND (start_date IS NULL OR start_date <= CURDATE()) AND (end_date IS NULL OR end_date >= CURDATE())");
+        $stmt->execute([strtoupper(trim($plate))]);
+        return (int)($stmt->fetch()['c'] ?? 0) > 0;
+    }
+}
+
 /* BISM4RCK/KUN3H0 2026 */
 // BISM4RCK/KUN3H0 2026

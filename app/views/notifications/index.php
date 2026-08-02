@@ -6,7 +6,7 @@ include app_path('views/layouts/header.php');
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2 class="mb-0">Notifications</h2>
-        <a class="btn btn-outline-secondary rounded-pill" href="<?= e(dashboard_url()) ?>">Back</a>
+        <div class="d-flex gap-2"><form method="post" action="<?= e(url('notifications_read.php')) ?>"><?= csrf_field() ?><input type="hidden" name="action" value="all"><input type="hidden" name="back" value="<?= e($_SERVER['REQUEST_URI'] ?? url('notifications.php')) ?>"><button class="btn btn-outline-primary rounded-pill">Mark all as read</button></form><a class="btn btn-outline-secondary rounded-pill" href="<?= e(dashboard_url()) ?>">Back</a></div>
     </div>
 
     <div class="d-grid gap-3">
@@ -19,7 +19,7 @@ include app_path('views/layouts/header.php');
                 <div class="small text-muted mt-1"><?= e($n['created_at']) ?></div>
                 <div class="mt-2"><?= e($n['message']) ?></div>
                 <?php if (!$n['is_read']): ?>
-                    <a class="btn btn-sm gh-primary rounded-pill mt-3" href="<?= e(url('notifications.php?read=' . (int)$n['id'] . '&back=' . urlencode($_SERVER['REQUEST_URI'] ?? 'notifications.php'))) ?>">Mark as read</a>
+                    <a class="btn btn-sm gh-primary rounded-pill mt-3" href="<?= e(url('notifications_read.php?id=' . (int)$n['id'] . '&back=' . urlencode($_SERVER['REQUEST_URI'] ?? 'notifications.php'))) ?>">Mark as read</a>
                 <?php endif; ?>
             </div>
         <?php endforeach; ?>

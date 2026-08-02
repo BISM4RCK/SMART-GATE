@@ -27,13 +27,14 @@ include app_path('views/layouts/header.php');
                         <div><?= e($t['reply']) ?></div>
                     </div>
                 <?php else: ?>
-                    <form method="post" action="<?= e(url('admin/tickets.php')) ?>" class="mt-3">
+                    <form method="post" action="<?= e(url('admin/tickets.php')) ?>" class="mt-3"><?= csrf_field() ?>
                         <input type="hidden" name="ticket_id" value="<?= (int)$t['id'] ?>">
                         <label class="form-label">Reply</label>
                         <textarea class="form-control" name="reply" rows="3" placeholder="Write a reply..."></textarea>
                         <button class="btn gh-primary rounded-pill mt-3" type="submit">Send reply</button>
                     </form>
                 <?php endif; ?>
+                <form method="post" action="<?= e(url('admin/tickets.php')) ?>" class="mt-2" onsubmit="return confirm('Delete this ticket?')"><?= csrf_field() ?><input type="hidden" name="action" value="delete"><input type="hidden" name="ticket_id" value="<?= (int)$t['id'] ?>"><button class="btn btn-sm btn-outline-danger">Delete ticket</button></form>
             </div>
         <?php endforeach; ?>
         <?php if (empty($tickets)): ?><div class="text-muted">No tickets yet.</div><?php endif; ?>

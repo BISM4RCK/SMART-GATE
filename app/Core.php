@@ -160,6 +160,29 @@ function redirect(string $path): void
     exit;
 }
 
+
+function csrf_token(): string
+{
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+function csrf_field(): string
+{
+    return '<input type="hidden" name="csrf_token" value="' . e(csrf_token()) . '">';
+}
+
+function csrf_validate(): void
+{
+    $token = (string)($_POST['csrf_token'] ?? '');
+    if ($token === '' || !hash_equals((string)($_SESSION['csrf_token'] ?? ''), $token)) {
+        http_response_code(419);
+        exit('Invalid or expired form token. Please go back and try again.');
+    }
+}
+
 function flash_set(string $type, string $message): void
 {
     $_SESSION['flash'] = ['type' => $type, 'message' => $message];

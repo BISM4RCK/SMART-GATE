@@ -16,6 +16,7 @@ $links = match ($role) {
         ['Dashboard', 'guard/dashboard.php', 'bi-speedometer2'],
         ['Quick Scan', 'guard/scan.php', 'bi-qr-code-scan'],
         ['Logs', 'guard/logs.php', 'bi-journal-text'],
+        ['Blacklist', 'guard/blacklist.php', 'bi-slash-circle'],
         ['Notifications', 'notifications.php', 'bi-bell'],
     ],
     'admin' => [
