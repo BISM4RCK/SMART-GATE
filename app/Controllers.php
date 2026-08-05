@@ -247,8 +247,9 @@ class GuardController
                 'tickets' => TicketModel::openCount(),
                 'vehicles' => count_rows("SELECT COUNT(*) c FROM vehicles"),
             ],
-            'requests' => array_slice(VisitorRequestModel::all(), 0, 6),
+            'requests' => array_slice(VisitorRequestModel::all(), 0, 8),
             'logs' => array_slice(GateLogModel::recent(8), 0, 8),
+            'blacklist' => array_slice(BlacklistModel::all(), 0, 5),
         ]);
     }
 
@@ -261,18 +262,64 @@ class GuardController
     public function scan(): void
     {
         require_role('guard');
+        $u = current_user();
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $result = GateLogModel::createAccess([
-                'plate_number' => trim($_POST['plate_number'] ?? ''),
-                'rfid_uid' => trim($_POST['rfid_uid'] ?? ''),
-                'event_type' => trim($_POST['event_type'] ?? 'manual_open'),
-                'source_device' => 'manual-guard',
-                'manual_override' => bool_from_input($_POST['manual_override'] ?? '0'),
-                'guard_id' => (int)current_user()['id'],
-                'raw_payload' => $_POST,
-            ]);
-            flash_set($result['gate_status'] === 'approved' ? 'success' : 'warning', $result['notes']);
+            csrf_validate();
+            $action = strtolower(trim($_POST['action'] ?? ''));
+            try {
+                if ($action === 'walk_in') {
+                    $plate = strtoupper(trim($_POST['plate_number'] ?? ''));
+                    $house = trim($_POST['visit_house_number'] ?? '');
+                    $count = (int)($_POST['visitor_count'] ?? 0);
+                    $visitor = trim($_POST['visitor_name'] ?? '');
+                    $driver = trim($_POST['driver_name'] ?? '');
+
+                    if ($plate === '' || $house === '' || $count < 1 || $visitor === '' || $driver === '') {
+                        throw new RuntimeException('Plate number, house number, number of people, driver name, and visitor name are all required.');
+                    }
+                    $blacklist = BlacklistModel::match($plate, $visitor);
+                    $requestId = null;
+                    $result = GateLogModel::createAccess([
+                        'plate_number' => $plate,
+                        'event_type' => 'manual_open',
+                        'source_device' => 'guard-walk-in',
+                        'manual_override' => '1',
+                        'guard_id' => (int)$u['id'],
+                        'actor_user_id' => (int)$u['id'],
+                        'visitor_name' => $visitor,
+                        'visitor_count' => $count,
+                        'visit_house_number' => $house,
+                        'raw_payload' => $_POST,
+                    ]);
+                    AuditLogModel::record((int)$u['id'], 'walk_in_visitor', 'gate', "Walk-in visitor {$visitor}; driver {$driver}; plate {$plate}; house {$house}; occupants {$count}");
+                    if ($blacklist) {
+                        flash_set('danger', 'BLACKLISTED — ACCESS DENIED. ' . ($blacklist['reason'] ?? 'Active blacklist entry.'));
+                    } else {
+                        GateCommandModel::create((int)$u['id'], 'walk_in_open', [
+                            'plate_number'=>$plate, 'visitor_name'=>$visitor, 'visit_house_number'=>$house
+                        ]);
+                        flash_set('success', 'WALK-IN VISITOR recorded. Gate-open command queued for the ESP32.');
+                    }
+                } elseif ($action === 'manual_override') {
+                    $plate = strtoupper(trim($_POST['plate_number'] ?? ''));
+                    if ($plate === '') throw new RuntimeException('Plate number is required for a manual override.');
+                    GateLogModel::createAccess([
+                        'plate_number' => $plate,
+                        'event_type' => 'manual_open',
+                        'source_device' => 'guard-manual-override',
+                        'manual_override' => '1',
+                        'guard_id' => (int)$u['id'],
+                        'actor_user_id' => (int)$u['id'],
+                        'raw_payload' => $_POST,
+                    ]);
+                    GateCommandModel::create((int)$u['id'], 'manual_override', ['plate_number'=>$plate]);
+                    AuditLogModel::record((int)$u['id'], 'manual_override', 'gate', "Guard manual override for plate {$plate}");
+                    flash_set('success', 'Manual gate-open command queued for the ESP32.');
+                }
+            } catch (Throwable $e) {
+                flash_set('danger', $e->getMessage());
+            }
             redirect('guard/scan.php');
         }
 
@@ -295,10 +342,13 @@ class GuardController
                     $plate = strtoupper(trim($_POST['plate_number'] ?? ''));
                     $reason = trim($_POST['reason'] ?? '');
                     if ($reason === '' || ($plate === '' && trim($_POST['visitor_name'] ?? '') === '')) throw new RuntimeException('Provide a plate number or visitor name and a reason.');
-                    BlacklistModel::add($_POST, (int)$u['id']);
+                    $bid = BlacklistModel::add($_POST, (int)$u['id']);
+                    AuditLogModel::record((int)$u['id'], 'blacklist_add', 'blacklist', 'Blacklist entry #' . $bid . ' created.');
                     flash_set('success', 'Blacklist entry added.');
                 } elseif ($action === 'remove') {
-                    if (!BlacklistModel::remove((int)($_POST['blacklist_id'] ?? 0))) throw new RuntimeException('Blacklist entry not found.');
+                    $bid = (int)($_POST['blacklist_id'] ?? 0);
+                    if (!BlacklistModel::remove($bid)) throw new RuntimeException('Blacklist entry not found.');
+                    AuditLogModel::record((int)$u['id'], 'blacklist_remove', 'blacklist', 'Blacklist entry #' . $bid . ' removed.');
                     flash_set('success', 'Blacklist entry removed.');
                 }
             } catch (Throwable $e) { flash_set('danger', $e->getMessage()); }
@@ -324,6 +374,33 @@ class AdminController
             'tickets' => array_slice(TicketModel::all(), 0, 5),
             'logs' => array_slice(GateLogModel::recent(8), 0, 8),
         ]);
+    }
+
+    public function manualOverride(): void
+    {
+        require_role('admin');
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            csrf_validate();
+            $plate = strtoupper(trim($_POST['plate_number'] ?? ''));
+            if ($plate === '') {
+                flash_set('danger', 'Plate number is required.');
+            } else {
+                $uid = (int)current_user()['id'];
+                GateLogModel::createAccess([
+                    'plate_number'=>$plate,
+                    'event_type'=>'manual_open',
+                    'source_device'=>'admin-manual-override',
+                    'manual_override'=>'1',
+                    'actor_user_id'=>$uid,
+                    'raw_payload'=>$_POST
+                ]);
+                GateCommandModel::create($uid, 'manual_override', ['plate_number'=>$plate]);
+                AuditLogModel::record($uid, 'manual_override', 'gate', "Admin manual override for plate {$plate}");
+                flash_set('success', 'Manual gate-open command queued for the ESP32.');
+            }
+            redirect('admin/dashboard.php');
+        }
+        redirect('admin/dashboard.php');
     }
 
     public function tickets(): void
@@ -387,52 +464,56 @@ class AdminController
                     $password = (string)($_POST['password'] ?? '');
                     $role = trim($_POST['role'] ?? '');
                     if ($fullName === '' || $email === '' || strlen($password) < 6 || !in_array($role, ['resident','guard','admin'], true)) {
-                        throw new RuntimeException('Complete the user fields; password must be at least 6 characters.');
+                        throw new RuntimeException('Complete the account fields; password must be at least 6 characters.');
                     }
+
+                    if ($role === 'resident') {
+                        $block = trim($_POST['block_number'] ?? '');
+                        $lot = trim($_POST['lot_number'] ?? '');
+                        $suffix = strtoupper(trim($_POST['household_suffix'] ?? ''));
+                        if ($block === '' || $lot === '') throw new RuntimeException('Block number and lot number are required for residents.');
+                        $house = $block . ' - ' . $lot . ($suffix !== '' ? '-' . $suffix : '');
+                        if (ResidentModel::findByHouse($house)) throw new RuntimeException('That household address already exists.');
+                    } elseif ($role === 'guard') {
+                        if (trim($_POST['guard_code'] ?? '') === '') throw new RuntimeException('Guard ID is required.');
+                    } else {
+                        if (trim($_POST['admin_code'] ?? '') === '') throw new RuntimeException('Admin ID is required.');
+                    }
+
                     $pdo = Database::pdo();
                     $pdo->beginTransaction();
                     $userId = UserModel::create(['full_name'=>$fullName,'email'=>$email,'password'=>$password,'role'=>$role]);
                     if ($role === 'resident') {
-                        $stmt = $pdo->prepare("INSERT INTO residents (user_id, house_number, block_number, contact_number) VALUES (?, ?, ?, ?)");
-                        $stmt->execute([$userId, trim($_POST['house_number'] ?? ''), trim($_POST['block_number'] ?? ''), trim($_POST['contact_number'] ?? '')]);
+                        $stmt = $pdo->prepare("INSERT INTO residents (user_id, house_number, block_number, lot_number, household_suffix, contact_number) VALUES (?, ?, ?, ?, ?, ?)");
+                        $stmt->execute([$userId, $house, $block, $lot, $suffix ?: null, trim($_POST['contact_number'] ?? '')]);
                     } elseif ($role === 'guard') {
                         $stmt = $pdo->prepare("INSERT INTO guards (user_id, guard_code, shift_name, contact_number) VALUES (?, ?, ?, ?)");
-                        $stmt->execute([$userId, trim($_POST['guard_code'] ?? ''), trim($_POST['shift_name'] ?? ''), trim($_POST['contact_number'] ?? '')]);
+                        $stmt->execute([$userId, trim($_POST['guard_code']), trim($_POST['shift_name'] ?? ''), trim($_POST['contact_number'] ?? '')]);
                     } else {
                         $stmt = $pdo->prepare("INSERT INTO admins (user_id, admin_code) VALUES (?, ?)");
-                        $stmt->execute([$userId, trim($_POST['admin_code'] ?? '')]);
+                        $stmt->execute([$userId, trim($_POST['admin_code'])]);
                     }
                     $pdo->commit();
+                    AuditLogModel::record((int)$me['id'], 'account_create', 'users', "Created {$role} account {$email}");
                     flash_set('success', ucfirst($role) . ' account created.');
                 } elseif ($action === 'delete_user') {
                     $userId = (int)($_POST['user_id'] ?? 0);
-                    if ($userId === (int)$me['id']) {
-                        throw new RuntimeException('You cannot remove your own admin account.');
-                    }
+                    if ($userId === (int)$me['id']) throw new RuntimeException('You cannot remove your own admin privileges/account.');
                     $target = UserModel::findById($userId);
                     if (!$target) throw new RuntimeException('User not found.');
                     UserModel::delete($userId);
+                    AuditLogModel::record((int)$me['id'], 'account_delete', 'users', "Removed {$target['role']} account {$target['email']}");
                     flash_set('success', 'User removed.');
-                } elseif ($action === 'add_vehicle') {
-                    $residentId = (int)($_POST['resident_id'] ?? 0);
-                    $plate = strtoupper(trim($_POST['plate_number'] ?? ''));
-                    $type = trim($_POST['vehicle_type'] ?? '');
-                    if (!$residentId || $plate === '' || $type === '') throw new RuntimeException('Resident, plate and vehicle type are required.');
-                    VehicleModel::create($residentId, $plate, $type, trim($_POST['color'] ?? ''));
-                    flash_set('success', 'Vehicle added to the resident account.');
-                } elseif ($action === 'delete_vehicle') {
-                    $vehicleId = (int)($_POST['vehicle_id'] ?? 0);
-                    if (!VehicleModel::delete($vehicleId)) throw new RuntimeException('Vehicle not found.');
-                    flash_set('success', 'Vehicle removed.');
                 } elseif ($action === 'blacklist_add') {
-                    $plate = strtoupper(trim($_POST['plate_number'] ?? ''));
                     $reason = trim($_POST['reason'] ?? '');
-                    if ($reason === '' || ($plate === '' && trim($_POST['visitor_name'] ?? '') === '')) throw new RuntimeException('Provide a plate number or visitor name and a reason.');
-                    BlacklistModel::add($_POST, (int)$me['id']);
+                    if ($reason === '' || (trim($_POST['plate_number'] ?? '') === '' && trim($_POST['visitor_name'] ?? '') === '')) throw new RuntimeException('Provide a plate number or visitor name and a reason.');
+                    $bid = BlacklistModel::add($_POST, (int)$me['id']);
+                    AuditLogModel::record((int)$me['id'], 'blacklist_add', 'blacklist', 'Blacklist entry #' . $bid . ' created.');
                     flash_set('success', 'Vehicle/visitor added to blacklist.');
                 } elseif ($action === 'blacklist_remove') {
                     $id = (int)($_POST['blacklist_id'] ?? 0);
                     if (!BlacklistModel::remove($id)) throw new RuntimeException('Blacklist entry not found.');
+                    AuditLogModel::record((int)$me['id'], 'blacklist_remove', 'blacklist', 'Blacklist entry #' . $id . ' removed.');
                     flash_set('success', 'Blacklist entry removed.');
                 }
             } catch (Throwable $e) {
@@ -443,14 +524,59 @@ class AdminController
         }
 
         View::render('admin/users', [
-            'pageTitle' => 'Users & Vehicles',
+            'pageTitle' => 'Accounts',
             'residents' => ResidentModel::all(),
             'guards' => UserModel::byRole('guard'),
             'admins' => UserModel::byRole('admin'),
-            'vehicles' => VehicleModel::all(),
             'blacklist' => BlacklistModel::all(),
         ]);
     }
+
+    public function vehicles(): void
+    {
+        require_role('admin');
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            csrf_validate();
+            try {
+                $action = strtolower(trim($_POST['action'] ?? ''));
+                if ($action === 'add') {
+                    $ownerRole = trim($_POST['owner_role'] ?? 'resident');
+                    $userId = (int)($_POST['owner_user_id'] ?? 0);
+                    $plate = strtoupper(trim($_POST['plate_number'] ?? ''));
+                    $type = trim($_POST['vehicle_type'] ?? '');
+                    if (!$userId || $plate === '' || $type === '' || !in_array($ownerRole, ['resident','guard','admin'], true)) throw new RuntimeException('Owner, plate and vehicle type are required.');
+                    if ($ownerRole === 'resident') {
+                        $resident = ResidentModel::findByUserId($userId);
+                        if (!$resident) throw new RuntimeException('Resident not found.');
+                        VehicleModel::create((int)$resident['id'], $plate, $type, trim($_POST['color'] ?? ''));
+                    } else {
+                        VehicleModel::createForUser($userId, $ownerRole, $plate, $type, trim($_POST['color'] ?? ''));
+                    }
+                    flash_set('success', 'Vehicle added.');
+                } elseif ($action === 'delete') {
+                    if (!VehicleModel::delete((int)$_POST['vehicle_id'])) throw new RuntimeException('Vehicle not found.');
+                    flash_set('success', 'Vehicle removed.');
+                }
+            } catch (Throwable $e) { flash_set('danger', $e->getMessage()); }
+            redirect('admin/vehicles.php' . (!empty($_POST['house_filter']) ? '?house=' . urlencode($_POST['house_filter']) : ''));
+        }
+        $house = trim($_GET['house'] ?? '');
+        View::render('admin/vehicles', [
+            'pageTitle'=>'Vehicle Management',
+            'vehicles'=>$house !== '' ? VehicleModel::forHouse($house) : VehicleModel::all(),
+            'house'=>$house,
+            'residents'=>ResidentModel::all(),
+            'guards'=>UserModel::byRole('guard'),
+            'admins'=>UserModel::byRole('admin'),
+        ]);
+    }
+
+    public function accountLogs(): void
+    {
+        require_role('admin');
+        View::render('admin/account_logs', ['pageTitle'=>'Account & Action Logs', 'logs'=>AuditLogModel::accountActivity(200)]);
+    }
+
 }
 
 class NotificationController

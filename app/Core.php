@@ -77,11 +77,16 @@ class Auth
         ];
 
         UserModel::touchLogin((int)$user['id']);
+        AuditLogModel::record((int)$user['id'], 'login', 'auth', 'Account login');
         return $_SESSION['user'];
     }
 
     public static function logout(): void
     {
+        $user = self::user();
+        if ($user) {
+            AuditLogModel::record((int)$user['id'], 'logout', 'auth', 'Account logout');
+        }
         unset($_SESSION['user']);
     }
 

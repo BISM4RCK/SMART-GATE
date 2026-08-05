@@ -36,11 +36,30 @@ class BlacklistModel
         return $stmt->execute([$status, $id]);
     }
 
+    public static function match(string $plate = '', string $visitorName = ''): ?array
+    {
+        $plate = strtoupper(trim($plate));
+        $visitorName = trim($visitorName);
+        $stmt = Database::pdo()->prepare("
+            SELECT b.*, u.full_name AS created_by_name
+            FROM blacklist b
+            LEFT JOIN users u ON u.id = b.created_by
+            WHERE b.status = 'active'
+              AND (b.start_date IS NULL OR b.start_date <= CURDATE())
+              AND (b.end_date IS NULL OR b.end_date >= CURDATE())
+              AND (
+                  (:plate_a <> '' AND b.plate_number = :plate_b)
+                  OR (:visitor_name_a <> '' AND LOWER(b.visitor_name) = LOWER(:visitor_name_b))
+              )
+            ORDER BY b.created_at DESC LIMIT 1
+        ");
+        $stmt->execute([':plate_a'=>$plate, ':plate_b'=>$plate, ':visitor_name_a'=>$visitorName, ':visitor_name_b'=>$visitorName]);
+        return $stmt->fetch() ?: null;
+    }
+
     public static function isActivePlate(string $plate): bool
     {
-        $stmt = Database::pdo()->prepare("SELECT COUNT(*) c FROM blacklist WHERE plate_number = ? AND status = 'active' AND (start_date IS NULL OR start_date <= CURDATE()) AND (end_date IS NULL OR end_date >= CURDATE())");
-        $stmt->execute([strtoupper(trim($plate))]);
-        return (int)($stmt->fetch()['c'] ?? 0) > 0;
+        return self::match($plate, '') !== null;
     }
 }
 
@@ -137,12 +156,43 @@ class VehicleModel
     public static function all(): array
     {
         return Database::pdo()->query("
+            SELECT v.*, r.house_number,
+                   COALESCE(ru.full_name, ou.full_name) AS full_name,
+                   COALESCE(r.house_number, CONCAT(UPPER(v.owner_role), ' ACCOUNT')) AS owner_label
+            FROM vehicles v
+            LEFT JOIN residents r ON r.id = v.resident_id
+            LEFT JOIN users ru ON ru.id = r.user_id
+            LEFT JOIN users ou ON ou.id = v.owner_user_id
+            ORDER BY v.created_at DESC
+        ")->fetchAll();
+    }
+
+    public static function forHouse(string $house): array
+    {
+        $stmt = Database::pdo()->prepare("
             SELECT v.*, r.house_number, u.full_name
             FROM vehicles v
             JOIN residents r ON r.id = v.resident_id
             JOIN users u ON u.id = r.user_id
+            WHERE r.house_number = ?
             ORDER BY v.created_at DESC
-        ")->fetchAll();
+        ");
+        $stmt->execute([trim($house)]);
+        return $stmt->fetchAll();
+    }
+
+    public static function forUser(int $userId): array
+    {
+        $stmt = Database::pdo()->prepare("SELECT * FROM vehicles WHERE owner_user_id = ? ORDER BY created_at DESC");
+        $stmt->execute([$userId]);
+        return $stmt->fetchAll();
+    }
+
+    public static function createForUser(int $userId, string $role, string $plate, string $type, string $color = ''): int
+    {
+        $stmt = Database::pdo()->prepare("INSERT INTO vehicles (resident_id, owner_user_id, owner_role, plate_number, vehicle_type, color, status) VALUES (NULL, ?, ?, ?, ?, ?, 'active')");
+        $stmt->execute([$userId, strtolower($role), strtoupper($plate), strtolower($type), $color ?: 'N/A']);
+        return (int)Database::pdo()->lastInsertId();
     }
     public static function create(int $residentId, string $plate, string $type, string $color = ''): int
     {
@@ -153,10 +203,13 @@ class VehicleModel
     public static function findByPlate(string $plate): ?array
     {
         $stmt = Database::pdo()->prepare("
-            SELECT v.*, r.id AS resident_id, r.user_id AS resident_user_id, r.house_number, u.full_name, rt.uid AS rfid_uid
+            SELECT v.*, r.id AS resident_id, r.user_id AS resident_user_id, r.house_number,
+                   COALESCE(ru.full_name, ou.full_name) AS full_name,
+                   v.owner_user_id, rt.uid AS rfid_uid
             FROM vehicles v
-            JOIN residents r ON r.id = v.resident_id
-            JOIN users u ON u.id = r.user_id
+            LEFT JOIN residents r ON r.id = v.resident_id
+            LEFT JOIN users ru ON ru.id = r.user_id
+            LEFT JOIN users ou ON ou.id = v.owner_user_id
             LEFT JOIN rfid_tags rt ON rt.vehicle_id = v.id
             WHERE v.plate_number = ?
             LIMIT 1
@@ -192,11 +245,14 @@ class VehicleModel
     public static function findByRfid(string $rfid): ?array
     {
         $stmt = Database::pdo()->prepare("
-            SELECT v.*, r.id AS resident_id, r.user_id AS resident_user_id, r.house_number, u.full_name, rt.uid AS rfid_uid
+            SELECT v.*, r.id AS resident_id, r.user_id AS resident_user_id, r.house_number,
+                   COALESCE(ru.full_name, ou.full_name) AS full_name,
+                   v.owner_user_id, rt.uid AS rfid_uid
             FROM rfid_tags rt
             JOIN vehicles v ON v.id = rt.vehicle_id
-            JOIN residents r ON r.id = v.resident_id
-            JOIN users u ON u.id = r.user_id
+            LEFT JOIN residents r ON r.id = v.resident_id
+            LEFT JOIN users ru ON ru.id = r.user_id
+            LEFT JOIN users ou ON ou.id = v.owner_user_id
             WHERE rt.uid = ?
             LIMIT 1
         ");
@@ -417,7 +473,7 @@ class GateLogModel
     public static function recent(int $limit = 10): array
     {
         $limit = max(1, min(100, $limit));
-        return Database::pdo()->query("SELECT * FROM gate_logs ORDER BY created_at DESC LIMIT {$limit}")->fetchAll();
+        return Database::pdo()->query("SELECT g.*, u.full_name AS actor_name FROM gate_logs g LEFT JOIN users u ON u.id = COALESCE(g.actor_user_id, g.guard_id) ORDER BY g.created_at DESC LIMIT {$limit}")->fetchAll();
     }
     public static function forResident(int $residentId): array
     {
@@ -439,12 +495,14 @@ class GateLogModel
         if ($rfid !== '') $matched = VehicleModel::findByRfid($rfid);
         if (!$matched && $plate !== '') $matched = VehicleModel::findByPlate($plate);
 
-        $blacklisted = $plate !== '' ? BlacklistModel::isActivePlate($plate) : false;
+        $visitorName = trim((string)($payload['visitor_name'] ?? ''));
+        $blacklistMatch = BlacklistModel::match($plate, $visitorName);
+        $blacklisted = $blacklistMatch !== null;
         $residentId = $matched ? (int)$matched['resident_id'] : null;
         $residentUserId = $matched ? (int)$matched['resident_user_id'] : null;
         $vehicleId = $matched['id'] ?? null;
         $gateStatus = $blacklisted ? 'denied' : ($matched ? 'approved' : 'denied');
-        $notes = $blacklisted ? 'Plate is on the active blacklist' : ($matched ? 'Matched ' . ($rfid !== '' ? 'RFID' : 'plate') : 'No matching resident vehicle found');
+        $notes = $blacklisted ? 'BLACKLISTED: ' . ($blacklistMatch['reason'] ?? 'Active blacklist entry') : ($matched ? 'Matched ' . ($rfid !== '' ? 'RFID' : 'plate') : 'No matching resident vehicle found');
 
         if ($manual) {
             $gateStatus = 'manual_override';
@@ -461,19 +519,26 @@ class GateLogModel
         }
 
         $guardId = !empty($payload['guard_id']) ? (int)$payload['guard_id'] : null;
+        $actorUserId = !empty($payload['actor_user_id']) ? (int)$payload['actor_user_id'] : $guardId;
+        $visitorRequestId = !empty($payload['visitor_request_id']) ? (int)$payload['visitor_request_id'] : null;
 
         $stmt = $pdo->prepare("
             INSERT INTO gate_logs
-            (resident_id, vehicle_id, guard_id, rfid_uid, plate_number, event_type, gate_status, source_device, plate_photo_path, vehicle_photo_path, raw_payload, log_notes)
+            (resident_id, vehicle_id, visitor_request_id, guard_id, actor_user_id, rfid_uid, plate_number, visitor_name, visitor_count, visit_house_number, event_type, gate_status, source_device, plate_photo_path, vehicle_photo_path, raw_payload, log_notes)
             VALUES
-            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([
             $residentId,
             $vehicleId,
+            $visitorRequestId,
             $guardId,
+            $actorUserId,
             $rfid ?: null,
             $plate ?: null,
+            $visitorName ?: null,
+            !empty($payload['visitor_count']) ? (int)$payload['visitor_count'] : null,
+            trim((string)($payload['visit_house_number'] ?? '')) ?: null,
             $event,
             $gateStatus,
             $source,
@@ -492,6 +557,79 @@ class GateLogModel
     public static function all(): array
     {
         return Database::pdo()->query("SELECT * FROM gate_logs ORDER BY created_at DESC")->fetchAll();
+    }
+}
+
+
+
+
+class GateCommandModel
+{
+    public static function create(int $userId, string $type, array $data = []): int
+    {
+        $stmt = Database::pdo()->prepare("
+            INSERT INTO gate_commands (requested_by, command_type, plate_number, visitor_name, visit_house_number, status)
+            VALUES (?, ?, ?, ?, ?, 'pending')
+        ");
+        $stmt->execute([
+            $userId, $type,
+            strtoupper(trim($data['plate_number'] ?? '')) ?: null,
+            trim($data['visitor_name'] ?? '') ?: null,
+            trim($data['visit_house_number'] ?? '') ?: null,
+        ]);
+        return (int)Database::pdo()->lastInsertId();
+    }
+
+    public static function pending(string $device = ''): ?array
+    {
+        $sql = "SELECT * FROM gate_commands WHERE status = 'pending' ORDER BY created_at ASC LIMIT 1";
+        $stmt = Database::pdo()->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetch() ?: null;
+    }
+
+    public static function markSent(int $id, string $device = ''): bool
+    {
+        $stmt = Database::pdo()->prepare("UPDATE gate_commands SET status='sent', device_name=?, sent_at=NOW() WHERE id=? AND status='pending'");
+        $stmt->execute([$device ?: null, $id]);
+        return $stmt->rowCount() > 0;
+    }
+
+    public static function complete(int $id): bool
+    {
+        $stmt = Database::pdo()->prepare("UPDATE gate_commands SET status='completed', completed_at=NOW() WHERE id=? AND status IN ('pending','sent')");
+        $stmt->execute([$id]);
+        return $stmt->rowCount() > 0;
+    }
+}
+
+
+class AuditLogModel
+{
+    public static function record(?int $userId, string $action, string $module = '', string $details = ''): int
+    {
+        $stmt = Database::pdo()->prepare("INSERT INTO audit_logs (user_id, action, module_name, details, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt->execute([
+            $userId,
+            $action,
+            $module ?: null,
+            $details ?: null,
+            $_SERVER['REMOTE_ADDR'] ?? null,
+            substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255) ?: null,
+        ]);
+        return (int)Database::pdo()->lastInsertId();
+    }
+
+    public static function accountActivity(int $limit = 100): array
+    {
+        $limit = max(1, min(500, $limit));
+        return Database::pdo()->query("
+            SELECT a.*, u.full_name, u.email, u.role
+            FROM audit_logs a
+            LEFT JOIN users u ON u.id = a.user_id
+            WHERE a.action IN ('login','logout','manual_override','walk_in_visitor','blacklist_add','blacklist_remove','account_create','account_delete')
+            ORDER BY a.created_at DESC LIMIT {$limit}
+        ")->fetchAll();
     }
 }
 

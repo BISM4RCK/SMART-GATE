@@ -1,63 +1,21 @@
 <?php
 /* BISM4RCK/KUN3H0 2026 */
-// BISM4RCK/KUN3H0 2026
 include app_path('views/layouts/header.php');
 ?>
 <div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="mb-0">Quick Scan</h2>
-        <a class="btn btn-outline-secondary rounded-pill" href="<?= e(url('guard/dashboard.php')) ?>">Back</a>
-    </div>
-
-    <div class="row g-3">
-        <div class="col-lg-5">
-            <div class="gh-card p-4">
-                <h5 class="mb-3">Manual gate log</h5>
-                <form method="post" action="<?= e(url('guard/scan.php')) ?>" class="d-grid gap-3">
-                    <div><label>Plate Number</label><input class="form-control" name="plate_number" placeholder="ABC 1234"></div>
-                    <div><label>RFID UID</label><input class="form-control" name="rfid_uid" placeholder="RFID-123"></div>
-                    <div>
-                        <label>Event Type</label>
-                        <select class="form-select" name="event_type">
-                            <option value="manual_open">manual_open</option>
-                            <option value="rfid_scan">rfid_scan</option>
-                            <option value="plate_scan">plate_scan</option>
-                            <option value="combined_scan">combined_scan</option>
-                        </select>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" name="manual_override" id="manual_override" value="1">
-                        <label class="form-check-label" for="manual_override">Manual override</label>
-                    </div>
-                    <button class="btn gh-primary rounded-pill" type="submit">Log access</button>
-                </form>
-            </div>
-        </div>
-        <div class="col-lg-7">
-            <div class="gh-card p-4">
-                <h5 class="mb-3">Recent logs</h5>
-                <div class="table-responsive">
-                    <table class="table gh-table align-middle">
-                        <thead><tr><th>Time</th><th>Event</th><th>Plate</th><th>RFID</th><th>Status</th></tr></thead>
-                        <tbody>
-                            <?php foreach ($logs as $log): ?>
-                                <tr>
-                                    <td><?= e($log['created_at']) ?></td>
-                                    <td><?= e($log['event_type']) ?></td>
-                                    <td><?= e($log['plate_number']) ?></td>
-                                    <td><?= e($log['rfid_uid']) ?></td>
-                                    <td><span class="badge rounded-pill <?= e(gate_badge($log['gate_status'])) ?>"><?= e($log['gate_status']) ?></span></td>
-                                </tr>
-                            <?php endforeach; ?>
-                            <?php if (empty($logs)): ?><tr><td colspan="5" class="text-center text-muted py-4">No logs yet.</td></tr><?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
+  <div class="d-flex justify-content-between align-items-center mb-4"><div><h1 class="display-6 fw-semibold mb-0">Gate Entry</h1><div class="text-muted">Guard walk-in protocol</div></div><a class="btn btn-outline-secondary rounded-pill" href="<?=e(url('guard/dashboard.php'))?>">Dashboard</a></div>
+  <div class="gh-card p-4 p-lg-5">
+    <div class="walkin-hero mb-4"><i class="bi bi-person-walking"></i><div><h2>WALK IN VISITOR</h2><p class="mb-0">Every field is required before the gate-open command can be queued.</p></div></div>
+    <form method="post" class="row g-3">
+      <?=csrf_field()?><input type="hidden" name="action" value="walk_in">
+      <div class="col-md-6"><label>Plate Number *</label><input class="form-control form-control-lg" name="plate_number" required></div>
+      <div class="col-md-6"><label>House Number *</label><input class="form-control form-control-lg" name="visit_house_number" required></div>
+      <div class="col-md-4"><label>People in Vehicle *</label><input class="form-control form-control-lg" type="number" min="1" name="visitor_count" required></div>
+      <div class="col-md-4"><label>Driver Name *</label><input class="form-control form-control-lg" name="driver_name" required></div>
+      <div class="col-md-4"><label>Visitor Name *</label><input class="form-control form-control-lg" name="visitor_name" required></div>
+      <div class="col-12 d-flex gap-2 flex-wrap mt-3"><button class="btn btn-primary btn-lg rounded-4 px-5" type="submit"><i class="bi bi-unlock me-2"></i>OPEN GATE & RECORD</button><a class="btn btn-outline-danger btn-lg rounded-4" href="<?=e(url('guard/dashboard.php'))?>">Cancel</a></div>
+    </form>
+  </div>
+  <div class="gh-card p-4 mt-3"><h3 class="h5">Manual override</h3><form method="post" class="row g-2 align-items-end"><?=csrf_field()?><input type="hidden" name="action" value="manual_override"><div class="col-md-6"><label>Plate Number *</label><input class="form-control" name="plate_number" required></div><div class="col-md-3"><button class="btn btn-warning w-100">OPEN GATE</button></div></form></div>
 </div>
-<?php
-include app_path('views/layouts/footer.php');
-/* BISM4RCK/KUN3H0 2026 */
-// BISM4RCK/KUN3H0 2026
+<?php include app_path('views/layouts/footer.php'); ?>

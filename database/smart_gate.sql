@@ -42,6 +42,8 @@ CREATE TABLE residents (
     user_id BIGINT UNSIGNED NOT NULL UNIQUE,
     house_number VARCHAR(50) NOT NULL UNIQUE,
     block_number VARCHAR(50) NULL,
+    lot_number VARCHAR(50) NULL,
+    household_suffix VARCHAR(10) NULL,
     contact_number VARCHAR(30) NULL,
     emergency_contact VARCHAR(30) NULL,
     status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
@@ -74,7 +76,9 @@ CREATE TABLE admins (
 
 CREATE TABLE vehicles (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    resident_id BIGINT UNSIGNED NOT NULL,
+    resident_id BIGINT UNSIGNED NULL,
+    owner_user_id BIGINT UNSIGNED NULL,
+    owner_role ENUM('resident','guard','admin') NOT NULL DEFAULT 'resident',
     plate_number VARCHAR(30) NOT NULL UNIQUE,
     vehicle_type ENUM('car', 'motorcycle', 'truck', 'other') NOT NULL,
     brand VARCHAR(100) NULL,
@@ -83,7 +87,8 @@ CREATE TABLE vehicles (
     status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_vehicles_resident FOREIGN KEY (resident_id) REFERENCES residents(id) ON DELETE CASCADE
+    CONSTRAINT fk_vehicles_resident FOREIGN KEY (resident_id) REFERENCES residents(id) ON DELETE CASCADE,
+    CONSTRAINT fk_vehicles_owner_user FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 CREATE TABLE rfid_tags (
@@ -158,8 +163,12 @@ CREATE TABLE gate_logs (
     vehicle_id BIGINT UNSIGNED NULL,
     visitor_request_id BIGINT UNSIGNED NULL,
     guard_id BIGINT UNSIGNED NULL,
+    actor_user_id BIGINT UNSIGNED NULL,
     rfid_uid VARCHAR(100) NULL,
     plate_number VARCHAR(30) NULL,
+    visitor_name VARCHAR(150) NULL,
+    visitor_count INT NULL,
+    visit_house_number VARCHAR(50) NULL,
     event_type ENUM('entry', 'exit', 'manual_open', 'rfid_scan', 'plate_scan', 'combined_scan') NOT NULL,
     gate_status ENUM('approved', 'denied', 'pending', 'manual_override') NOT NULL DEFAULT 'pending',
     source_device VARCHAR(100) NULL,
@@ -172,7 +181,23 @@ CREATE TABLE gate_logs (
     CONSTRAINT fk_gate_logs_resident FOREIGN KEY (resident_id) REFERENCES residents(id) ON DELETE SET NULL,
     CONSTRAINT fk_gate_logs_vehicle FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE SET NULL,
     CONSTRAINT fk_gate_logs_guard FOREIGN KEY (guard_id) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_gate_logs_actor FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL,
     CONSTRAINT fk_gate_logs_visitor_request FOREIGN KEY (visitor_request_id) REFERENCES visitor_requests(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE gate_commands (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    requested_by BIGINT UNSIGNED NOT NULL,
+    command_type ENUM('walk_in_open','manual_override') NOT NULL,
+    plate_number VARCHAR(30) NULL,
+    visitor_name VARCHAR(150) NULL,
+    visit_house_number VARCHAR(50) NULL,
+    status ENUM('pending','sent','completed','cancelled') NOT NULL DEFAULT 'pending',
+    device_name VARCHAR(100) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    sent_at DATETIME NULL,
+    completed_at DATETIME NULL,
+    CONSTRAINT fk_gate_commands_user FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE notifications (
@@ -253,8 +278,8 @@ SET @resident_user_id = (SELECT id FROM users WHERE email='resident@goldenhomes.
 SET @guard_user_id = (SELECT id FROM users WHERE email='guard@goldenhomes.local' LIMIT 1);
 SET @admin_user_id = (SELECT id FROM users WHERE email='admin@goldenhomes.local' LIMIT 1);
 
-INSERT INTO residents (user_id, house_number, block_number, contact_number, emergency_contact)
-VALUES (@resident_user_id, '12-A', 'Block 12', '09171234567', '09179876543');
+INSERT INTO residents (user_id, house_number, block_number, lot_number, household_suffix, contact_number, emergency_contact)
+VALUES (@resident_user_id, '12-A', '12', 'A', 'A', '09171234567', '09179876543');
 
 INSERT INTO guards (user_id, guard_code, shift_name, contact_number)
 VALUES (@guard_user_id, 'GRD-001', 'Day Shift', '09170001111');
