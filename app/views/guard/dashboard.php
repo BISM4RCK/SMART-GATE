@@ -9,9 +9,9 @@ include app_path('views/layouts/header.php');
   </div>
 
   <div class="row g-3 guard-action-grid">
-    <div class="col-md-4"><a class="guard-action guard-action-primary" href="<?=e(url('guard/scan.php'))?>"><i class="bi bi-person-walking"></i><span>WALK IN VISITOR</span><small>Required visitor details</small></a></div>
-    <div class="col-md-4"><a class="guard-action" href="<?=e(url('guard/logs.php'))?>"><i class="bi bi-journal-text"></i><span>LOGS</span><small>Gate activity</small></a></div>
-    <div class="col-md-4"><a class="guard-action" href="<?=e(url('guard/blacklist.php'))?>"><i class="bi bi-slash-circle"></i><span>BLACKLIST</span><small>Block / remove access</small></a></div>
+    <div class="col-md-4"><a class="guard-action guard-action-primary guard-action-walkin" href="<?=e(url('guard/scan.php'))?>"><i class="bi bi-person-walking"></i><span>WALK IN VISITOR</span><small>Required visitor details</small></a></div>
+    <div class="col-md-4"><a class="guard-action guard-action-logs" href="<?=e(url('guard/logs.php'))?>"><i class="bi bi-journal-text"></i><span>LOGS</span><small>Gate activity</small></a></div>
+    <div class="col-md-4"><a class="guard-action guard-action-blacklist" href="<?=e(url('guard/blacklist.php'))?>"><i class="bi bi-slash-circle"></i><span>BLACKLIST</span><small>Block / remove access</small></a></div>
   </div>
 
   <div class="row g-2 compact-stats mb-4">

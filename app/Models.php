@@ -65,6 +65,57 @@ class BlacklistModel
 
 /* BISM4RCK/KUN3H0 2026 */
 // BISM4RCK/KUN3H0 2026
+
+class SiteSettingsModel
+{
+    private static function ensureTable(): void
+    {
+        Database::pdo()->exec("CREATE TABLE IF NOT EXISTS site_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    }
+
+    public static function all(): array
+    {
+        self::ensureTable();
+        $rows = Database::pdo()->query("SELECT setting_key, setting_value FROM site_settings")->fetchAll();
+        $out = [];
+        foreach ($rows as $row) $out[$row['setting_key']] = $row['setting_value'];
+        return $out;
+    }
+
+    public static function get(string $key, ?string $default = null): ?string
+    {
+        self::ensureTable();
+        $stmt = Database::pdo()->prepare("SELECT setting_value FROM site_settings WHERE setting_key = ? LIMIT 1");
+        $stmt->execute([$key]);
+        $value = $stmt->fetchColumn();
+        return $value === false ? $default : (string)$value;
+    }
+
+    public static function set(string $key, string $value): void
+    {
+        self::ensureTable();
+        $stmt = Database::pdo()->prepare("INSERT INTO site_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+        $stmt->execute([$key, $value]);
+    }
+
+    public static function setMany(array $settings): void
+    {
+        self::ensureTable();
+        $pdo = Database::pdo();
+        $pdo->beginTransaction();
+        try {
+            foreach ($settings as $key => $value) {
+                $stmt = $pdo->prepare("INSERT INTO site_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+                $stmt->execute([$key, (string)$value]);
+            }
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+    }
+}
+
 class UserModel
 {
     public static function findByEmail(string $email): ?array

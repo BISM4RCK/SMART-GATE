@@ -360,6 +360,39 @@ class GuardController
 
 class AdminController
 {
+    public function settings(): void
+    {
+        require_role('admin');
+        $defaults = [
+            'landing_login_bg' => '#10263f', 'landing_login_text' => '#ffffff', 'landing_login_width' => '240', 'landing_login_height' => '240',
+            'landing_visitor_bg' => '#d9b45f', 'landing_visitor_text' => '#10263f', 'landing_visitor_width' => '240', 'landing_visitor_height' => '240',
+            'dashboard_bg' => '#f5f6f8',
+            'guard_walkin_bg' => '#10263f', 'guard_walkin_text' => '#ffffff', 'guard_walkin_width' => '100', 'guard_walkin_height' => '175',
+            'guard_logs_bg' => '#ffffff', 'guard_logs_text' => '#0f172a', 'guard_logs_width' => '100', 'guard_logs_height' => '175',
+            'guard_blacklist_bg' => '#ffffff', 'guard_blacklist_text' => '#0f172a', 'guard_blacklist_width' => '100', 'guard_blacklist_height' => '175',
+            'admin_override_bg' => '#10263f', 'admin_override_text' => '#ffffff', 'admin_override_width' => '100', 'admin_override_height' => '175',
+        ];
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            csrf_validate();
+            $allowed = [];
+            foreach ($defaults as $key => $default) {
+                $value = trim((string)($_POST[$key] ?? $default));
+                if (str_ends_with($key, '_bg') || str_ends_with($key, '_text')) {
+                    if (!preg_match('/^#[0-9a-fA-F]{6}$/', $value)) $value = $default;
+                } else {
+                    $value = (string)max(80, min(600, (int)$value));
+                }
+                $allowed[$key] = $value;
+            }
+            SiteSettingsModel::setMany($allowed);
+            AuditLogModel::record((int)current_user()['id'], 'settings_update', 'site_settings', 'Updated dashboard and button appearance settings.');
+            flash_set('success', 'Appearance settings saved.');
+            redirect('admin/settings.php');
+        }
+        $settings = array_merge($defaults, SiteSettingsModel::all());
+        View::render('admin/settings', ['pageTitle'=>'Appearance Settings', 'settings'=>$settings]);
+    }
+
     public function dashboard(): void
     {
         require_role('admin');

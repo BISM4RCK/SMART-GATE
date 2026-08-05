@@ -312,3 +312,10 @@ VALUES
 (@admin_user_id, 'New concern', 'A resident submitted a new concern.', 0),
 (@guard_user_id, 'Guard notice', 'Your dashboard is ready.', 0);
 -- BISM4RCK/KUN3H0 2026
+
+-- Optional appearance settings table. The application also creates this table automatically if needed.
+CREATE TABLE IF NOT EXISTS site_settings (
+    setting_key VARCHAR(100) PRIMARY KEY,
+    setting_value TEXT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
