@@ -23,7 +23,7 @@ $user = current_user();
             <div class="collapse navbar-collapse" id="ghTopNav">
                 <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
                     <li class="nav-item dropdown">
-                        <a class="nav-link gh-header-pill gh-header-notify dropdown-toggle position-relative" href="#" role="button" data-bs-toggle="dropdown">Notifications
+                        <a class="nav-link dropdown-toggle position-relative" href="#" role="button" data-bs-toggle="dropdown">Notifications
                             <?php if ($unreadCount > 0): ?><span class="badge bg-danger rounded-pill ms-1"><?= (int)$unreadCount ?></span><?php endif; ?>
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end shadow">
@@ -40,8 +40,8 @@ $user = current_user();
                             <li><a class="dropdown-item" href="<?= e(url('notifications.php')) ?>">View all notifications</a></li>
                         </ul>
                     </li>
-                    <li class="nav-item"><a class="nav-link gh-header-pill gh-header-dashboard" href="<?= e(dashboard_url($user)) ?>">Dashboard</a></li>
-                    <li class="nav-item"><a class="nav-link gh-header-logout" href="<?= e(url('logout.php')) ?>">Logout</a></li>
+                    <li class="nav-item"><a class="nav-link" href="<?= e(dashboard_url($user)) ?>">Dashboard</a></li>
+                    <li class="nav-item"><a class="nav-link" href="<?= e(url('logout.php')) ?>">Logout</a></li>
                 </ul>
             </div>
         <?php endif; ?>

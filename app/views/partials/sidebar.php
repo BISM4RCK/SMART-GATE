@@ -23,9 +23,7 @@ $links = match ($role) {
         ['Dashboard', 'admin/dashboard.php', 'bi-speedometer2'],
         ['Tickets', 'admin/tickets.php', 'bi-chat-left-text'],
         ['Users', 'admin/users.php', 'bi-people'],
-        ['Vehicles', 'admin/vehicles.php', 'bi-car-front'],
         ['Logs', 'admin/logs.php', 'bi-journal-text'],
-        ['Account Logs', 'admin/account_logs.php', 'bi-clock-history'],
         ['Notifications', 'notifications.php', 'bi-bell'],
     ],
     default => []
@@ -48,7 +46,7 @@ $current = trim(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?? '');
         </div>
         <div class="mt-3 d-grid gap-2">
             <a class="btn btn-sm gh-btn-soft" href="<?= e(dashboard_url($user)) ?>"><i class="bi bi-arrow-return-left me-2"></i>Back to Dashboard</a>
-            <a class="btn btn-sm gh-dashboard-logout" href="<?= e(url('logout.php')) ?>"><i class="bi bi-box-arrow-right me-2"></i>Logout</a>
+            <a class="btn btn-sm gh-btn-outline" href="<?= e(url('logout.php')) ?>"><i class="bi bi-box-arrow-right me-2"></i>Logout</a>
         </div>
     </div>
 </aside>

@@ -75,7 +75,13 @@ include app_path('views/layouts/header.php');
                 <input class="form-control" name="message" placeholder="Write the trouble here..." required>
             </div>
             <div class="col-12">
-                <button class="btn gh-primary rounded-pill" type="submit">Create ticket</button>
+                
+<div class="mb-3">
+  <label for="people_in_vehicle" class="form-label">People in vehicle</label>
+  <input type="number" class="form-control" id="people_in_vehicle"
+         name="people_in_vehicle" min="1" step="1" required>
+</div>
+<button class="btn gh-primary rounded-pill" type="submit">Create ticket</button>
             </div>
         </form>
     </div>

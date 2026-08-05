@@ -32,6 +32,20 @@ include app_path('views/layouts/header.php');
         <?php endif; ?>
     </div>
 </div>
+<?php if (!empty($vehicles)): ?>
+<div class="gh-card p-4 mt-3">
+    <h5 class="mb-3">Vehicles</h5>
+    <div class="list-group">
+        <?php foreach ($vehicles as $vehicle): ?>
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+                <span><?= e(strtoupper($vehicle['plate_number'])) ?></span>
+                <span class="text-muted"><?= e(ucfirst($vehicle['vehicle_type'])) ?> · <?= (int)($vehicle['people_count'] ?? 1) ?> people</span>
+            </div>
+        <?php endforeach; ?>
+    </div>
+</div>
+<?php endif; ?>
+
 <?php
 include app_path('views/layouts/footer.php');
 /* BISM4RCK/KUN3H0 2026 */

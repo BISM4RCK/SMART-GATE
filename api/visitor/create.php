@@ -6,12 +6,24 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') { json_response(['ok' => false, 'mess
 $house = trim($_POST['house_number'] ?? '');
 $name = trim($_POST['visitor_name'] ?? '');
 $contact = trim($_POST['contact_number'] ?? '');
-$plate = trim($_POST['plate_number'] ?? '');
-$type = trim($_POST['vehicle_type'] ?? '');
+$plates = $_POST['plate_number'] ?? [];
+$types = $_POST['vehicle_type'] ?? [];
+if (!is_array($plates)) $plates = [$plates];
+if (!is_array($types)) $types = [$types];
+$vehicles = [];
+foreach ($plates as $i => $vehiclePlate) {
+    $vehiclePlate = trim((string)$vehiclePlate);
+    $vehicleType = trim((string)($types[$i] ?? ''));
+    if ($vehiclePlate !== '' || $vehicleType !== '') {
+        $vehicles[] = ['plate_number' => $vehiclePlate, 'vehicle_type' => $vehicleType];
+    }
+}
+$plate = $vehicles[0]['plate_number'] ?? '';
+$type = $vehicles[0]['vehicle_type'] ?? '';
 $purpose = trim($_POST['purpose'] ?? '');
 $resident = ResidentModel::findByHouse($house);
 if (!$resident) { json_response(['ok' => false, 'message' => 'No resident found for that house number'], 404); }
-if ($house === '' || $name === '' || $plate === '' || $type === '' || $purpose === '') { json_response(['ok' => false, 'message' => 'Missing required fields'], 422); }
+if ($house === '' || $name === '' || $purpose === '' || count($vehicles) < 1 || $plate === '' || $type === '') { json_response(['ok' => false, 'message' => 'Missing required fields'], 422); }
 $qr = 'GH-' . strtoupper(bin2hex(random_bytes(4)));
 $requestId = VisitorRequestModel::create([
     'resident_id' => (int)$resident['id'],
@@ -20,6 +32,7 @@ $requestId = VisitorRequestModel::create([
     'contact_number' => $contact,
     'plate_number' => $plate,
     'vehicle_type' => $type,
+    'vehicles' => $vehicles,
     'purpose_of_visit' => $purpose,
     'qr_reference' => $qr,
     'requested_visit_date' => date('Y-m-d'),
