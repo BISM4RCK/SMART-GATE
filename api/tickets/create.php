@@ -1,6 +1,5 @@
 <?php
-/* BISM4RCK/KUN3H0 2026 */
-// BISM4RCK/KUN3H0 2026
+/* BISM4RCK-KUN3H0 2026 */
 require_once __DIR__ . '/_bootstrap.php';
 require_login();
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') { json_response(['ok' => false, 'message' => 'Method not allowed'], 405); }
@@ -19,5 +18,3 @@ TicketModel::create($residentId, $user['name'], $user['role'], $house, $subject,
 $admin = UserModel::byRole('admin')[0] ?? null;
 if ($admin) NotificationModel::create((int)$admin['id'], 'New trouble ticket', $subject);
 json_response(['ok' => true, 'message' => 'Ticket created']);
-/* BISM4RCK/KUN3H0 2026 */
-/* BISM4RCK-KUN3H0 2026 */

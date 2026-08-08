@@ -1,6 +1,5 @@
 <?php
-/* BISM4RCK/KUN3H0 2026 */
-// BISM4RCK/KUN3H0 2026
+/* BISM4RCK-KUN3H0 2026 */
 include app_path('views/layouts/header.php');
 $targets=[
 'landing_login'=>'Landing Login','landing_visitor'=>'Landing Visitor','guard_walkin'=>'Guard Walk-In Visitor',
@@ -27,5 +26,3 @@ $targets=[
 </tbody></table></div>
 </div></div>
 <?php include app_path('views/layouts/footer.php'); ?>
-<!-- BISM4RCK/KUN3H0 2026 -->
-/* BISM4RCK-KUN3H0 2026 */

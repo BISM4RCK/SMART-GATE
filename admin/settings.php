@@ -1,6 +1,5 @@
 <?php
-/* BISM4RCK/KUN3H0 2026 */
-// BISM4RCK/KUN3H0 2026
+/* BISM4RCK-KUN3H0 2026 */
 require_once __DIR__ . '/../app/bootstrap.php';
 require_role('admin');
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -12,6 +11,3 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     redirect('admin/settings.php');
 }
 View::render('admin/settings', ['pageTitle'=>'Customize Interface','settings'=>UiSettingsModel::all()]);
-/* BISM4RCK/KUN3H0 2026 */
-// BISM4RCK/KUN3H0 2026
-/* BISM4RCK-KUN3H0 2026 */

@@ -1,6 +1,5 @@
 <?php
-/* BISM4RCK/KUN3H0 2026 */
-// BISM4RCK/KUN3H0 2026
+/* BISM4RCK-KUN3H0 2026 */
 require_once __DIR__ . '/_bootstrap.php';
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') { json_response(['ok' => false, 'message' => 'Method not allowed'], 405); }
 $house = trim($_POST['house_number'] ?? '');
@@ -42,5 +41,3 @@ if ($idFile) {
 }
 NotificationModel::create((int)$resident['user_id'], 'New visitor request', 'A visitor request was submitted for House ' . $house . '.');
 json_response(['ok'=>true,'qr_reference'=>$qr,'request_id'=>$requestId,'visitor_id'=>$credential['visitor_id'],'qr_token'=>$credential['qr_token'],'barcode_token'=>$credential['barcode_token']]);
-/* BISM4RCK/KUN3H0 2026 */
-/* BISM4RCK-KUN3H0 2026 */

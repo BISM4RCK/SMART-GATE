@@ -1,6 +1,5 @@
 <?php
-/* BISM4RCK/KUN3H0 2026 */
-// BISM4RCK/KUN3H0 2026
+/* BISM4RCK-KUN3H0 2026 */
 class Database
 {
     public static function pdo(): PDO
@@ -334,7 +333,4 @@ function latest_notifications(?int $userId = null, int $limit = 5): array
     if (!$userId) return [];
     return NotificationModel::latest($userId, $limit);
 }
-/* BISM4RCK/KUN3H0 2026 */
-// BISM4RCK/KUN3H0 2026
 ?>
-/* BISM4RCK-KUN3H0 2026 */

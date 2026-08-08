@@ -1,6 +1,5 @@
 <?php
-/* BISM4RCK/KUN3H0 2026 */
-// BISM4RCK/KUN3H0 2026
+/* BISM4RCK-KUN3H0 2026 */
 class HomeController
 {
     public function index(): void
@@ -446,11 +445,7 @@ class Esp32Controller
         json_response($result);
     }
 }
-/* BISM4RCK/KUN3H0 2026 */
-// BISM4RCK/KUN3H0 2026
 
 
 
-/* BISM4RCK/KUN3H0 2026 */
 ?>
-/* BISM4RCK-KUN3H0 2026 */

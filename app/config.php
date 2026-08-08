@@ -1,6 +1,5 @@
 <?php
-/* BISM4RCK/KUN3H0 2026 */
-// BISM4RCK/KUN3H0 2026
+/* BISM4RCK-KUN3H0 2026 */
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -24,6 +23,3 @@ define('DB_PORT', '3306');
 define('DB_NAME', 'smart_gate');
 define('DB_USER', 'root');
 define('DB_PASS', '');
-/* BISM4RCK/KUN3H0 2026 */
-// BISM4RCK/KUN3H0 2026
-/* BISM4RCK-KUN3H0 2026 */

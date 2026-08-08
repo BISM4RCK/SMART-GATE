@@ -1,6 +1,5 @@
 <?php
-/* BISM4RCK/KUN3H0 2026 */
-// BISM4RCK/KUN3H0 2026
+/* BISM4RCK-KUN3H0 2026 */
 include app_path('views/layouts/header.php');
 ?>
 <div class="gh-landing-hero">
@@ -14,5 +13,3 @@ include app_path('views/layouts/header.php');
     </div>
 </div>
 <?php include app_path('views/layouts/footer.php'); ?>
-<!-- BISM4RCK/KUN3H0 2026 -->
-/* BISM4RCK-KUN3H0 2026 */

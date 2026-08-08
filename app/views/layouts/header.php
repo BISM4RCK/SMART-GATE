@@ -1,5 +1,5 @@
 <?php
-
+/* BISM4RCK-KUN3H0 2026 */
 $user = current_user();
 $unreadCount = $user ? unread_notifications_count((int)$user['id']) : 0;
 ?>
@@ -33,6 +33,4 @@ $unreadCount = $user ? unread_notifications_count((int)$user['id']) : 0;
 
 
 <?php
-
 ?>
-

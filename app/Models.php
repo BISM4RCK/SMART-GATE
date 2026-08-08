@@ -1,4 +1,5 @@
 <?php
+/* BISM4RCK-KUN3H0 2026 */
 
 
 class AccountActivityLogModel
@@ -107,8 +108,6 @@ class BlacklistModel
     }
 }
 
-/* BISM4RCK/KUN3H0 2026 */
-// BISM4RCK/KUN3H0 2026
 class UserModel
 {
     public static function findByEmail(string $email): ?array
@@ -547,7 +546,4 @@ class UiSettingsModel
 }
 
 
-/* BISM4RCK/KUN3H0 2026 */
-// BISM4RCK/KUN3H0 2026
 ?>
-/* BISM4RCK-KUN3H0 2026 */
