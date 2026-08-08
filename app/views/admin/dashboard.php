@@ -6,7 +6,6 @@ include app_path('views/layouts/header.php');
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
         <div>
             <h2 class="mb-1">Admin Dashboard</h2>
-            <div class="text-muted">Administrative controls first. Guard-compatible tools remain available where appropriate; Gate Scan is guard-only.</div>
         </div>
     </div>
 
@@ -78,20 +77,6 @@ include app_path('views/layouts/header.php');
                 <h5 class="mb-1">Tickets</h5>
                 <div class="small text-muted">Review and respond to resident concerns and support tickets.</div>
             </a>
-        </div>
-        <div class="col-md-6 col-xl-3">
-            <div class="gh-card p-4 h-100">
-                <div class="fs-3 mb-2"><i class="bi bi-shield-check"></i></div>
-                <h5 class="mb-1">Admin Access</h5>
-                <div class="small text-muted">Account, vehicle, blacklist, audit-log, gate-control, walk-in, ticket, and customization controls are retained.</div>
-            </div>
-        </div>
-        <div class="col-md-6 col-xl-3">
-            <div class="gh-card p-4 h-100">
-                <div class="fs-3 mb-2"><i class="bi bi-qr-code-scan"></i></div>
-                <h5 class="mb-1">Gate Scan</h5>
-                <div class="small text-muted">Guard-only by design. Admin Gate Scan was intentionally removed per the latest requirement.</div>
-            </div>
         </div>
     </section>
 

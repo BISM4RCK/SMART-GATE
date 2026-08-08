@@ -6,7 +6,7 @@ include app_path('views/layouts/header.php');
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
         <div>
             <h2 class="mb-1">Account Management</h2>
-            <div class="text-muted">Manage resident and staff accounts separately, including administrator-controlled password resets.</div>
+            <div class="text-muted">Manage resident and staff accounts separately.</div>
         </div>
     </div>
 
@@ -83,18 +83,24 @@ include app_path('views/layouts/header.php');
                                 <td><?= e($r['email']) ?></td>
                                 <td><?= e($r['house_number']) ?></td>
                                 <td>
-                                    <div class="d-flex flex-wrap gap-2">
-                                        <form method="post" class="d-flex gap-1" onsubmit="return confirm('Change this account password?')">
-                                            <?= csrf_field() ?>
-                                            <input type="hidden" name="action" value="change_password">
-                                            <input type="hidden" name="user_id" value="<?= e($r['user_id']) ?>">
-                                            <input class="form-control form-control-sm" type="password" name="new_password" minlength="6" placeholder="New password" required>
-                                            <button class="btn btn-sm btn-outline-primary">Change</button>
-                                        </form>
-                                        <form method="post" onsubmit="return confirm('Remove this resident and their vehicles?')">
-                                            <?= csrf_field() ?><input type="hidden" name="action" value="delete_user"><input type="hidden" name="user_id" value="<?= e($r['user_id']) ?>">
-                                            <button class="btn btn-sm btn-outline-danger">Remove</button>
-                                        </form>
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                            Manage account
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                            <li><h6 class="dropdown-header"><?= e($r['full_name']) ?></h6></li>
+                                            <li><button class="dropdown-item" type="button" data-account-action="password" data-user-id="<?= e($r['user_id']) ?>" data-user-name="<?= e($r['full_name']) ?>">Change password</button></li>
+                                            <li><button class="dropdown-item" type="button" data-account-action="username" data-user-id="<?= e($r['user_id']) ?>" data-user-name="<?= e($r['full_name']) ?>" data-current-username="<?= e($r['email']) ?>">Change username</button></li>
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li>
+                                                <form method="post" onsubmit="return confirm('Remove this resident and their vehicles?')">
+                                                    <?= csrf_field() ?>
+                                                    <input type="hidden" name="action" value="delete_user">
+                                                    <input type="hidden" name="user_id" value="<?= e($r['user_id']) ?>">
+                                                    <button class="dropdown-item text-danger" type="submit">Delete account</button>
+                                                </form>
+                                            </li>
+                                        </ul>
                                     </div>
                                 </td>
                             </tr>
@@ -109,7 +115,7 @@ include app_path('views/layouts/header.php');
             <?php if (($accountType ?? 'all') !== 'resident'): ?>
             <div class="gh-card p-4">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div><h5 class="mb-1">Staff Accounts</h5><div class="small text-muted">Guards and administrators are grouped together as staff.</div></div>
+                    <div><h5 class="mb-1">Staff Accounts</h5><div class="small text-muted">Guards and administrators</div></div>
                     <span class="badge text-bg-dark"><?= count($guards) + count($admins) ?></span>
                 </div>
                 <div class="table-responsive">
@@ -122,20 +128,28 @@ include app_path('views/layouts/header.php');
                                 <td><span class="badge <?= $u['role'] === 'admin' ? 'text-bg-danger' : 'text-bg-warning' ?>"><?= e(ucfirst($u['role'])) ?></span></td>
                                 <td><?= e($u['email']) ?></td>
                                 <td>
-                                    <div class="d-flex flex-wrap gap-2">
-                                        <form method="post" class="d-flex gap-1" onsubmit="return confirm('Change this account password?')">
-                                            <?= csrf_field() ?>
-                                            <input type="hidden" name="action" value="change_password">
-                                            <input type="hidden" name="user_id" value="<?= e($u['id']) ?>">
-                                            <input class="form-control form-control-sm" type="password" name="new_password" minlength="6" placeholder="New password" required>
-                                            <button class="btn btn-sm btn-outline-primary">Change</button>
-                                        </form>
-                                        <?php if ((int)$u['id'] !== (int)current_user()['id']): ?>
-                                            <form method="post" onsubmit="return confirm('Remove this account?')">
-                                                <?= csrf_field() ?><input type="hidden" name="action" value="delete_user"><input type="hidden" name="user_id" value="<?= e($u['id']) ?>">
-                                                <button class="btn btn-sm btn-outline-danger">Remove</button>
-                                            </form>
-                                        <?php else: ?><span class="small text-muted align-self-center">Current account</span><?php endif; ?>
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                            Manage account
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                            <li><h6 class="dropdown-header"><?= e($u['full_name']) ?></h6></li>
+                                            <li><button class="dropdown-item" type="button" data-account-action="password" data-user-id="<?= e($u['id']) ?>" data-user-name="<?= e($u['full_name']) ?>">Change password</button></li>
+                                            <li><button class="dropdown-item" type="button" data-account-action="username" data-user-id="<?= e($u['id']) ?>" data-user-name="<?= e($u['full_name']) ?>" data-current-username="<?= e($u['email']) ?>">Change username</button></li>
+                                            <?php if ((int)$u['id'] !== (int)current_user()['id']): ?>
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li>
+                                                    <form method="post" onsubmit="return confirm('Remove this account?')">
+                                                        <?= csrf_field() ?>
+                                                        <input type="hidden" name="action" value="delete_user">
+                                                        <input type="hidden" name="user_id" value="<?= e($u['id']) ?>">
+                                                        <button class="dropdown-item text-danger" type="submit">Delete account</button>
+                                                    </form>
+                                                </li>
+                                            <?php else: ?>
+                                                <li><span class="dropdown-item-text small text-muted">Current account cannot be deleted</span></li>
+                                            <?php endif; ?>
+                                        </ul>
                                     </div>
                                 </td>
                             </tr>
@@ -150,8 +164,71 @@ include app_path('views/layouts/header.php');
     </div>
 </div>
 
+<div class="modal fade" id="accountPasswordModal" tabindex="-1" aria-labelledby="accountPasswordModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form method="post">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="change_password">
+                <input type="hidden" name="user_id" id="passwordUserId">
+                <div class="modal-header"><h5 class="modal-title" id="accountPasswordModalLabel">Change password</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+                <div class="modal-body">
+                    <p class="small text-muted">Set a new password for <strong id="passwordUserName"></strong>.</p>
+                    <label class="form-label" for="newPassword">New password</label>
+                    <input class="form-control" id="newPassword" type="password" name="new_password" minlength="6" autocomplete="new-password" required>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button class="btn gh-primary" type="submit">Save password</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="accountUsernameModal" tabindex="-1" aria-labelledby="accountUsernameModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form method="post">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="change_username">
+                <input type="hidden" name="user_id" id="usernameUserId">
+                <div class="modal-header"><h5 class="modal-title" id="accountUsernameModalLabel">Change username</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+                <div class="modal-body">
+                    <p class="small text-muted">The username is the account's login email address.</p>
+                    <label class="form-label" for="newUsername">New username / email</label>
+                    <input class="form-control" id="newUsername" type="email" name="new_username" autocomplete="username" required>
+                    <div class="form-text">This must be unique across all accounts.</div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button class="btn gh-primary" type="submit">Save username</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    const passwordModalElement = document.getElementById('accountPasswordModal');
+    const usernameModalElement = document.getElementById('accountUsernameModal');
+    const passwordModal = passwordModalElement ? new bootstrap.Modal(passwordModalElement) : null;
+    const usernameModal = usernameModalElement ? new bootstrap.Modal(usernameModalElement) : null;
+
+    document.querySelectorAll('[data-account-action]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const action = button.dataset.accountAction;
+            const userId = button.dataset.userId || '';
+            const userName = button.dataset.userName || 'this account';
+            if (action === 'password' && passwordModal) {
+                document.getElementById('passwordUserId').value = userId;
+                document.getElementById('passwordUserName').textContent = userName;
+                document.getElementById('newPassword').value = '';
+                passwordModal.show();
+            }
+            if (action === 'username' && usernameModal) {
+                document.getElementById('usernameUserId').value = userId;
+                document.getElementById('newUsername').value = button.dataset.currentUsername || '';
+                usernameModal.show();
+            }
+        });
+    });
+
     const role = document.getElementById('accountRole');
     const boxes = {
         resident: document.getElementById('residentFields'),

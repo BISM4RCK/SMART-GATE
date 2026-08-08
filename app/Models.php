@@ -149,6 +149,11 @@ class UserModel
         $stmt = Database::pdo()->prepare('UPDATE users SET password = ? WHERE id = ?');
         return $stmt->execute([password_hash($password, PASSWORD_DEFAULT), $id]);
     }
+    public static function updateUsername(int $id, string $username): bool
+    {
+        $stmt = Database::pdo()->prepare('UPDATE users SET email = ? WHERE id = ?');
+        return $stmt->execute([$username, $id]);
+    }
     public static function delete(int $id): bool
     {
         $stmt = Database::pdo()->prepare("DELETE FROM users WHERE id = ?");
