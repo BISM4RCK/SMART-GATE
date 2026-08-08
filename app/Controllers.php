@@ -258,13 +258,13 @@ class GuardController
 
     public function scan(): void
     {
-        require_role(['guard','admin']);
-        $me=current_user(); $target=$me['role']==='admin'?'admin/scan.php':'guard/scan.php';
+        require_role('guard');
+        $me=current_user(); $target='guard/scan.php';
         if ($_SERVER['REQUEST_METHOD']==='POST') {
             csrf_validate();
             $rfid=trim($_POST['rfid_uid']??''); $qr=trim($_POST['qr_token']??''); $barcode=trim($_POST['barcode_token']??'');
             if($rfid===''&&$qr===''&&$barcode===''){flash_set('warning','Scan an RFID, QR, or barcode credential.');redirect($target);}
-            $result=GateLogModel::createAccess(['rfid_uid'=>$rfid,'qr_token'=>$qr,'barcode_token'=>$barcode,'event_type'=>$qr?'qr_scan':($barcode?'barcode_scan':'rfid_scan'),'source_device'=>$me['role']==='admin'?'admin-panel':'guard-panel','guard_id'=>$me['role']==='guard'?(int)$me['id']:null,'actor_user_id'=>(int)$me['id'],'actor_role'=>$me['role'],'raw_payload'=>$_POST]);
+            $result=GateLogModel::createAccess(['rfid_uid'=>$rfid,'qr_token'=>$qr,'barcode_token'=>$barcode,'event_type'=>$qr?'qr_scan':($barcode?'barcode_scan':'rfid_scan'),'source_device'=>'guard-panel','guard_id'=>(int)$me['id'],'actor_user_id'=>(int)$me['id'],'actor_role'=>$me['role'],'raw_payload'=>$_POST]);
             activity_log('gate_scan',$result['notes']);
             flash_set(in_array($result['gate_status'],['approved','manual_override'],true)?'success':($result['gate_status']==='pending'?'warning':'danger'),$result['notes']);
             redirect($target);
@@ -288,7 +288,7 @@ class GuardController
                 } elseif($action==='checkin'){
                     $visitorId=strtoupper(trim($_POST['visitor_id']??''));$barcode=trim($_POST['barcode_token']??'');$lookup=$barcode?WalkInVisitorModel::findByToken($barcode):WalkInVisitorModel::findByVisitorId($visitorId);
                     if(!$lookup)throw new RuntimeException('Walk-in visitor credential not found.');
-                    $result=GateLogModel::createAccess(['visitor_id'=>$lookup['visitor_id'],'barcode_token'=>$lookup['barcode_token'],'event_type'=>'walk_in_checkin','source_device'=>$me['role']==='admin'?'admin-walkin':'guard-walkin','actor_user_id'=>(int)$me['id'],'actor_role'=>$me['role'],'guard_id'=>$me['role']==='guard'?(int)$me['id']:null,'raw_payload'=>$_POST]);
+                    $result=GateLogModel::createAccess(['visitor_id'=>$lookup['visitor_id'],'barcode_token'=>$lookup['barcode_token'],'event_type'=>'walk_in_checkin','source_device'=>$me['role']==='admin'?'admin-walkin':'guard-walkin','actor_user_id'=>(int)$me['id'],'actor_role'=>$me['role'],'guard_id'=>(int)$me['id'],'raw_payload'=>$_POST]);
                     activity_log('walk_in_checkin','Walk-in visitor '.$lookup['visitor_id'].' checked in');flash_set($result['gate_status']==='approved'?'success':'danger',$result['notes']);
                 }
             }catch(Throwable $e){flash_set('danger',$e->getMessage());}
@@ -326,7 +326,6 @@ class AdminController
         }
         View::render('admin/dashboard',['pageTitle'=>'Admin Dashboard','stats'=>['residents'=>count_rows('SELECT COUNT(*) c FROM residents'),'requests'=>count_rows('SELECT COUNT(*) c FROM visitor_requests'),'tickets'=>TicketModel::openCount(),'logs'=>count_rows('SELECT COUNT(*) c FROM gate_logs')],'tickets'=>array_slice(TicketModel::all(),0,5),'logs'=>array_slice(GateLogModel::recent(8),0,8)]);
     }
-    public function scan(): void { require_role('admin'); (new GuardController())->scan(); }
     public function walkIn(): void { require_role('admin'); (new GuardController())->walkIn(); }
     public function tickets(): void
     {
@@ -364,10 +363,16 @@ class AdminController
                     else{if(trim($_POST['admin_code']??'')==='')throw new RuntimeException('Admin ID is required.');$stmt=$pdo->prepare('INSERT INTO admins (user_id,admin_code) VALUES (?,?)');$stmt->execute([$userId,trim($_POST['admin_code'])]);}
                     $pdo->commit();activity_log('account_created',ucfirst($role).' account '.$email);flash_set('success',ucfirst($role).' account created.');
                 }elseif($action==='delete_user'){$userId=(int)($_POST['user_id']??0);if($userId===(int)$me['id'])throw new RuntimeException('You cannot remove your own admin account.');$target=UserModel::findById($userId);if(!$target)throw new RuntimeException('User not found.');UserModel::delete($userId);activity_log('account_deleted','Account '.$target['email']);flash_set('success','User removed.');}
+                elseif($action==='change_password'){$userId=(int)($_POST['user_id']??0);$password=(string)($_POST['new_password']??'');$target=UserModel::findById($userId);if(!$target)throw new RuntimeException('User not found.');if(strlen($password)<6)throw new RuntimeException('Password must be at least 6 characters.');if(UserModel::updatePassword($userId,$password)){activity_log('account_password_changed','Password changed for '.$target['email']);flash_set('success','Password changed for '.($target['full_name']??$target['email']).'.');}else throw new RuntimeException('Password could not be changed.');}
             }catch(Throwable $e){if(Database::pdo()->inTransaction())Database::pdo()->rollBack();flash_set('danger',$e->getMessage());}
             redirect('admin/users.php');
         }
-        View::render('admin/users',['pageTitle'=>'Account Management','residents'=>ResidentModel::all(),'guards'=>UserModel::byRole('guard'),'admins'=>UserModel::byRole('admin')]);
+        $accountType=strtolower(trim($_GET['account_type']??''));
+        if(!in_array($accountType,['resident','staff'],true)) $accountType='all';
+        $residents=$accountType==='staff'?[]:ResidentModel::all();
+        $guards=$accountType==='resident'?[]:UserModel::byRole('guard');
+        $admins=$accountType==='resident'?[]:UserModel::byRole('admin');
+        View::render('admin/users',['pageTitle'=>'Account Management','residents'=>$residents,'guards'=>$guards,'admins'=>$admins,'accountType'=>$accountType]);
     }
     public function vehicles(): void
     {

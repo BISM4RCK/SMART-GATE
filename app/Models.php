@@ -144,6 +144,11 @@ class UserModel
         $stmt->execute([$data['full_name'], $data['email'], password_hash($data['password'], PASSWORD_DEFAULT), $data['role']]);
         return (int)$pdo->lastInsertId();
     }
+    public static function updatePassword(int $id, string $password): bool
+    {
+        $stmt = Database::pdo()->prepare('UPDATE users SET password = ? WHERE id = ?');
+        return $stmt->execute([password_hash($password, PASSWORD_DEFAULT), $id]);
+    }
     public static function delete(int $id): bool
     {
         $stmt = Database::pdo()->prepare("DELETE FROM users WHERE id = ?");
