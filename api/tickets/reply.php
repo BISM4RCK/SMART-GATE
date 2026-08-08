@@ -11,3 +11,4 @@ TicketModel::reply($ticketId, (int)current_user()['id'], $reply);
 json_response(['ok' => true, 'message' => 'Reply saved']);
 /* BISM4RCK/KUN3H0 2026 */
 // BISM4RCK/KUN3H0 2026
+/* BISM4RCK-KUN3H0 2026 */

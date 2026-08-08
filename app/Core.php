@@ -77,11 +77,14 @@ class Auth
         ];
 
         UserModel::touchLogin((int)$user['id']);
+        AccountActivityLogModel::record((int)$user['id'], $user['role'], $user['email'], 'login', 'Successful login');
         return $_SESSION['user'];
     }
 
     public static function logout(): void
     {
+        $user=self::user();
+        if ($user && in_array($user['role'] ?? '', ['guard','admin'], true)) AccountActivityLogModel::record((int)$user['id'], $user['role'], $user['email'] ?? $user['name'] ?? null, 'logout', 'User logged out');
         unset($_SESSION['user']);
     }
 
@@ -147,7 +150,7 @@ function url(string $path = ''): string
 
 function asset($path = '')
 {
-    return '/smart-gate/assets/' . ltrim($path, '/');
+    return rtrim(BASE_URL, '/') . '/assets/' . ltrim($path, '/');
 }
 
 function redirect(string $path): void
@@ -219,11 +222,50 @@ function dashboard_url(?array $user = null): string
 {
     $user ??= current_user();
     return match ($user['role'] ?? '') {
-        'resident' => '/smart-gate/resident/dashboard.php',
-        'guard'    => '/smart-gate/guard/dashboard.php',
-        'admin'    => '/smart-gate/admin/dashboard.php',
-        default    => '/smart-gate/index.php',
+        'resident' => rtrim(BASE_URL,'/') . '/resident/dashboard.php',
+        'guard'    => rtrim(BASE_URL,'/') . '/guard/dashboard.php',
+        'admin'    => rtrim(BASE_URL,'/') . '/admin/dashboard.php',
+        default    => rtrim(BASE_URL,'/') . '/index.php',
     };
+}
+
+
+function ui_setting(string $key, string $field, $default = '') {
+    static $cache = null;
+    if ($cache === null) {
+        try { $cache = UiSettingsModel::all(); } catch (Throwable $e) { $cache = []; }
+    }
+    return $cache[$key][$field] ?? $default;
+}
+
+function ui_custom_css(): string {
+    static $done = false;
+    if ($done) return '';
+    $done = true;
+    $keys = ['landing_login','landing_visitor','guard_walkin','guard_logs','guard_blacklist','admin_override','admin_users','admin_vehicles','admin_logs','dashboard_background'];
+    $css = '';
+    foreach ($keys as $key) {
+        $class = 'ui-' . preg_replace('/[^a-z0-9_-]/i','-', $key);
+        $bg = ui_setting($key,'bg_color','');
+        $fg = ui_setting($key,'text_color','');
+        $w = ui_setting($key,'width','');
+        $h = ui_setting($key,'height','');
+        $r = ui_setting($key,'radius','');
+        if ($key === 'dashboard_background' && $bg) {
+            $css .= "body.gh-app-body{background:" . e($bg) . "!important;}";
+            continue;
+        }
+        if ($bg || $fg || $w || $h || $r) {
+            $css .= ".{$class}{";
+            if ($bg) $css .= "background:" . e($bg) . "!important;";
+            if ($fg) $css .= "color:" . e($fg) . "!important;";
+            if ($w) $css .= "width:" . e($w) . "px!important;min-width:" . e($w) . "px!important;";
+            if ($h) $css .= "height:" . e($h) . "px!important;";
+            if ($r) $css .= "border-radius:" . e($r) . "px!important;";
+            $css .= "}";
+        }
+    }
+    return $css;
 }
 
 function bool_from_input($value): bool
@@ -279,6 +321,13 @@ function unread_notifications_count(?int $userId = null): int
     return NotificationModel::unreadCount($userId);
 }
 
+function activity_log(string $action, string $details = '', ?array $user = null): void
+{
+    $user ??= current_user();
+    if (!$user || !in_array($user['role'] ?? '', ['guard','admin'], true)) return;
+    AccountActivityLogModel::record((int)$user['id'], (string)$user['role'], (string)($user['email'] ?? $user['name'] ?? $user['id']), $action, $details);
+}
+
 function latest_notifications(?int $userId = null, int $limit = 5): array
 {
     $userId ??= (int)(current_user()['id'] ?? 0);
@@ -288,3 +337,4 @@ function latest_notifications(?int $userId = null, int $limit = 5): array
 /* BISM4RCK/KUN3H0 2026 */
 // BISM4RCK/KUN3H0 2026
 ?>
+/* BISM4RCK-KUN3H0 2026 */

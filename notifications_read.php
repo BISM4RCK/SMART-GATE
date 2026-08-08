@@ -5,3 +5,4 @@ require_once __DIR__ . '/app/bootstrap.php';
 (new NotificationController())->read();
 /* BISM4RCK/KUN3H0 2026 */
 // BISM4RCK/KUN3H0 2026
+/* BISM4RCK-KUN3H0 2026 */

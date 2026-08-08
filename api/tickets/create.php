@@ -20,3 +20,4 @@ $admin = UserModel::byRole('admin')[0] ?? null;
 if ($admin) NotificationModel::create((int)$admin['id'], 'New trouble ticket', $subject);
 json_response(['ok' => true, 'message' => 'Ticket created']);
 /* BISM4RCK/KUN3H0 2026 */
+/* BISM4RCK-KUN3H0 2026 */

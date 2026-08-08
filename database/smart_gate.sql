@@ -11,9 +11,10 @@ SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS concerns;
 DROP TABLE IF EXISTS audit_logs;
 DROP TABLE IF EXISTS notifications;
+DROP TABLE IF EXISTS walk_in_visitor_vehicles;
+DROP TABLE IF EXISTS walk_in_visitors;
 DROP TABLE IF EXISTS gate_logs;
 DROP TABLE IF EXISTS bookings;
-DROP TABLE IF EXISTS visitor_request_vehicles;
 DROP TABLE IF EXISTS visitor_attachments;
 DROP TABLE IF EXISTS visitor_requests;
 DROP TABLE IF EXISTS blacklist;
@@ -108,6 +109,8 @@ CREATE TABLE visitor_requests (
     plate_number VARCHAR(30) NOT NULL,
     vehicle_type ENUM('car', 'motorcycle', 'truck', 'other') NOT NULL DEFAULT 'other',
     purpose_of_visit VARCHAR(255) NOT NULL,
+    people_count INT UNSIGNED NOT NULL DEFAULT 1,
+    id_not_available TINYINT(1) NOT NULL DEFAULT 0,
     government_id_type VARCHAR(100) NULL,
     government_id_number VARCHAR(100) NULL,
     status ENUM('pending', 'approved', 'rejected', 'expired', 'cancelled') NOT NULL DEFAULT 'pending',
@@ -131,11 +134,10 @@ CREATE TABLE visitor_request_vehicles (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     visitor_request_id BIGINT UNSIGNED NOT NULL,
     plate_number VARCHAR(30) NOT NULL,
-    vehicle_type ENUM('car', 'motorcycle', 'truck', 'other') NOT NULL DEFAULT 'other',
+    vehicle_type ENUM('car','motorcycle','truck','other') NOT NULL DEFAULT 'other',
     people_count INT UNSIGNED NOT NULL DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_vrv_request FOREIGN KEY (visitor_request_id) REFERENCES visitor_requests(id) ON DELETE CASCADE,
-    INDEX idx_vrv_request (visitor_request_id)
+    CONSTRAINT fk_vrv_request FOREIGN KEY (visitor_request_id) REFERENCES visitor_requests(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE visitor_attachments (
@@ -164,15 +166,45 @@ CREATE TABLE bookings (
     CONSTRAINT fk_bookings_request FOREIGN KEY (visitor_request_id) REFERENCES visitor_requests(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+CREATE TABLE walk_in_visitors (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    visitor_id CHAR(6) NOT NULL UNIQUE,
+    visitor_name VARCHAR(150) NOT NULL,
+    contact_number VARCHAR(30) NULL,
+    purpose_of_visit VARCHAR(255) NOT NULL,
+    plate_number VARCHAR(30) NULL,
+    vehicle_type VARCHAR(50) NOT NULL DEFAULT 'other',
+    barcode_token_hash CHAR(64) NOT NULL UNIQUE,
+    barcode_token VARCHAR(255) NOT NULL,
+    created_by BIGINT UNSIGNED NULL,
+    status ENUM('active','completed','cancelled') NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_walkin_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE walk_in_visitor_vehicles (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    walk_in_id BIGINT UNSIGNED NOT NULL,
+    plate_number VARCHAR(30) NOT NULL,
+    vehicle_type VARCHAR(50) NOT NULL DEFAULT 'other',
+    people_count INT UNSIGNED NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_walkin_vehicle_walkin FOREIGN KEY (walk_in_id) REFERENCES walk_in_visitors(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 CREATE TABLE gate_logs (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     resident_id BIGINT UNSIGNED NULL,
     vehicle_id BIGINT UNSIGNED NULL,
     visitor_request_id BIGINT UNSIGNED NULL,
+    walk_in_id BIGINT UNSIGNED NULL,
     guard_id BIGINT UNSIGNED NULL,
+    actor_user_id BIGINT UNSIGNED NULL,
+    actor_role VARCHAR(20) NULL,
     rfid_uid VARCHAR(100) NULL,
     plate_number VARCHAR(30) NULL,
-    event_type ENUM('entry', 'exit', 'manual_open', 'rfid_scan', 'plate_scan', 'combined_scan') NOT NULL,
+    event_type VARCHAR(50) NOT NULL,
     gate_status ENUM('approved', 'denied', 'pending', 'manual_override') NOT NULL DEFAULT 'pending',
     source_device VARCHAR(100) NULL,
     plate_photo_path VARCHAR(255) NULL,
@@ -184,7 +216,9 @@ CREATE TABLE gate_logs (
     CONSTRAINT fk_gate_logs_resident FOREIGN KEY (resident_id) REFERENCES residents(id) ON DELETE SET NULL,
     CONSTRAINT fk_gate_logs_vehicle FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE SET NULL,
     CONSTRAINT fk_gate_logs_guard FOREIGN KEY (guard_id) REFERENCES users(id) ON DELETE SET NULL,
-    CONSTRAINT fk_gate_logs_visitor_request FOREIGN KEY (visitor_request_id) REFERENCES visitor_requests(id) ON DELETE SET NULL
+    CONSTRAINT fk_gate_logs_visitor_request FOREIGN KEY (visitor_request_id) REFERENCES visitor_requests(id) ON DELETE SET NULL,
+    CONSTRAINT fk_gate_logs_walk_in FOREIGN KEY (walk_in_id) REFERENCES walk_in_visitors(id) ON DELETE SET NULL,
+    CONSTRAINT fk_gate_logs_actor FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 CREATE TABLE notifications (
@@ -198,6 +232,18 @@ CREATE TABLE notifications (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE ui_settings (
+    setting_key VARCHAR(80) PRIMARY KEY,
+    bg_color VARCHAR(7) NULL,
+    text_color VARCHAR(7) NULL,
+    width_px INT NULL,
+    height_px INT NULL,
+    radius_px INT NULL,
+    updated_by BIGINT UNSIGNED NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_ui_settings_user FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 CREATE TABLE audit_logs (
@@ -266,7 +312,7 @@ SET @guard_user_id = (SELECT id FROM users WHERE email='guard@goldenhomes.local'
 SET @admin_user_id = (SELECT id FROM users WHERE email='admin@goldenhomes.local' LIMIT 1);
 
 INSERT INTO residents (user_id, house_number, block_number, contact_number, emergency_contact)
-VALUES (@resident_user_id, '12-A', 'Block 12', '09171234567', '09179876543');
+VALUES (@resident_user_id, '12-4-A', '12', '09171234567', '09179876543');
 
 INSERT INTO guards (user_id, guard_code, shift_name, contact_number)
 VALUES (@guard_user_id, 'GRD-001', 'Day Shift', '09170001111');
@@ -274,7 +320,7 @@ VALUES (@guard_user_id, 'GRD-001', 'Day Shift', '09170001111');
 INSERT INTO admins (user_id, admin_code)
 VALUES (@admin_user_id, 'ADM-001');
 
-SET @resident_id = (SELECT id FROM residents WHERE house_number='12-A' LIMIT 1);
+SET @resident_id = (SELECT id FROM residents WHERE house_number='12-4-A' LIMIT 1);
 
 INSERT INTO vehicles (resident_id, plate_number, vehicle_type, brand, model, color) VALUES
 (@resident_id, 'ABC 1234', 'car', 'Toyota', 'Vios', 'White'),
@@ -299,3 +345,41 @@ VALUES
 (@admin_user_id, 'New concern', 'A resident submitted a new concern.', 0),
 (@guard_user_id, 'Guard notice', 'Your dashboard is ready.', 0);
 -- BISM4RCK/KUN3H0 2026
+
+-- CUMULATIVE FEATURE SUPPORT
+-- README intentionally untouched.
+ALTER TABLE residents ADD COLUMN IF NOT EXISTS lot_number VARCHAR(50) NULL AFTER block_number;
+ALTER TABLE residents ADD COLUMN IF NOT EXISTS household_letter VARCHAR(5) NULL AFTER lot_number;
+
+CREATE TABLE IF NOT EXISTS visitor_credentials(
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, visitor_request_id BIGINT UNSIGNED NOT NULL, visitor_id CHAR(6) NOT NULL,
+ qr_token_hash CHAR(64) NOT NULL, barcode_token_hash CHAR(64) NOT NULL, qr_token VARCHAR(255) NOT NULL, barcode_token VARCHAR(255) NOT NULL,
+ created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uq_vid(visitor_id), UNIQUE KEY uq_vr(visitor_request_id), UNIQUE KEY uq_qr(qr_token_hash), UNIQUE KEY uq_barcode(barcode_token_hash),
+ CONSTRAINT fk_vc_request FOREIGN KEY(visitor_request_id) REFERENCES visitor_requests(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+ALTER TABLE visitor_credentials ADD COLUMN IF NOT EXISTS qr_token VARCHAR(255) NULL;
+ALTER TABLE visitor_credentials ADD COLUMN IF NOT EXISTS barcode_token VARCHAR(255) NULL;
+
+CREATE TABLE IF NOT EXISTS account_activity_logs(
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id BIGINT UNSIGNED NULL, account_type VARCHAR(20) NOT NULL, account_identifier VARCHAR(120) NULL, action VARCHAR(80) NOT NULL, details TEXT NULL, ip_address VARCHAR(45) NULL, user_agent TEXT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ KEY idx_type(account_type),KEY idx_user(user_id),KEY idx_action(action),KEY idx_created(created_at), CONSTRAINT fk_activity_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+ALTER TABLE account_activity_logs ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45) NULL;
+ALTER TABLE account_activity_logs ADD COLUMN IF NOT EXISTS user_agent TEXT NULL;
+
+CREATE TABLE IF NOT EXISTS gate_commands(
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, issued_by BIGINT UNSIGNED NULL, issued_by_role VARCHAR(20) NULL, command VARCHAR(40) NOT NULL, source VARCHAR(40) NOT NULL, payload JSON NULL,status ENUM('pending','completed','denied','expired') NOT NULL DEFAULT 'pending', created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,completed_at DATETIME NULL,
+ KEY idx_status(status),KEY idx_created(created_at), CONSTRAINT fk_gate_command_user FOREIGN KEY(issued_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS user_vehicles(
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,user_id BIGINT UNSIGNED NOT NULL, plate_number VARCHAR(32) NOT NULL,vehicle_type VARCHAR(50) NULL,color VARCHAR(50) NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ KEY idx_user(user_id),KEY idx_plate(plate_number), CONSTRAINT fk_user_vehicle_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS color VARCHAR(50) NULL;
+
+INSERT INTO visitor_credentials (visitor_request_id, visitor_id, qr_token_hash, barcode_token_hash, qr_token, barcode_token) VALUES
+((SELECT id FROM visitor_requests WHERE qr_reference='GH-REQ-0001' LIMIT 1), 'DEMO01', SHA2('GHQR-DEMO01',256), SHA2('GHBC-DEMO01',256), 'GHQR-DEMO01', 'GHBC-DEMO01'),
+((SELECT id FROM visitor_requests WHERE qr_reference='GH-REQ-0002' LIMIT 1), 'DEMO02', SHA2('GHQR-DEMO02',256), SHA2('GHBC-DEMO02',256), 'GHQR-DEMO02', 'GHBC-DEMO02');
+
+-- BISM4RCK-KUN3H0 2026

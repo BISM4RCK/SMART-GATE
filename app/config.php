@@ -9,11 +9,13 @@ date_default_timezone_set('Asia/Manila');
 define('APP_NAME', 'GOLDEN HOMES Subdivision');
 define('APP_SHORT', 'GOLDEN HOMES');
 
-$documentRoot = str_replace('\\', '/', realpath($_SERVER['DOCUMENT_ROOT']));
+$documentRoot = str_replace('\\', '/', realpath($_SERVER['DOCUMENT_ROOT'] ?: dirname(__DIR__)));
 $appRoot = str_replace('\\', '/', realpath(__DIR__ . '/..'));
-
-$basePath = str_replace($documentRoot, '', $appRoot);
-$basePath = rtrim($basePath, '/');
+$basePath = '';
+if ($documentRoot && $appRoot && str_starts_with($appRoot, $documentRoot)) {
+    $basePath = rtrim(substr($appRoot, strlen($documentRoot)), '/');
+}
+if ($basePath === '/' ) $basePath='';
 
 define('BASE_URL', $basePath);
 
@@ -24,3 +26,4 @@ define('DB_USER', 'root');
 define('DB_PASS', '');
 /* BISM4RCK/KUN3H0 2026 */
 // BISM4RCK/KUN3H0 2026
+/* BISM4RCK-KUN3H0 2026 */

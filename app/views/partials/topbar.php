@@ -1,7 +1,5 @@
 <?php
-/* BISM4RCK/KUN3H0 2026 */
-// BISM4RCK/KUN3H0 2026
-/* BISM4RCK/KUN3H0 2026 */
+
 $user = current_user();
 ?>
 
@@ -51,5 +49,6 @@ $user = current_user();
 
 
 <?php
-/* BISM4RCK/KUN3H0 2026 */
+
 ?>
+

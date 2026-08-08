@@ -1,52 +1,10 @@
-<?php
-/* BISM4RCK/KUN3H0 2026 */
-// BISM4RCK/KUN3H0 2026
-include app_path('views/layouts/header.php');
-?>
-<div class="container py-4">
-    <div class="gh-card p-4 p-lg-5">
-        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
-            <div>
-                <h2 class="mb-1">Visitor Status</h2>
-                <div class="text-muted">Reference: <?= e($ref) ?></div>
-            </div>
-            <a class="btn btn-outline-secondary rounded-pill" href="<?= e(url('index.php')) ?>">Home</a>
-        </div>
-
-        <?php if (empty($request)): ?>
-            <div class="alert alert-warning mb-0">No request found for that reference.</div>
-        <?php else: ?>
-            <div class="row g-3">
-                <div class="col-md-4"><div class="gh-stat"><div class="label">House</div><div class="value fs-4"><?= e($request['house_number']) ?></div></div></div>
-                <div class="col-md-4"><div class="gh-stat"><div class="label">Visitor</div><div class="value fs-4"><?= e($request['visitor_name']) ?></div></div></div>
-                <div class="col-md-4"><div class="gh-stat"><div class="label">Status</div><div class="value fs-4"><?= e($request['status']) ?></div></div></div>
-            </div>
-            <div class="mt-4">
-                <div class="fw-semibold mb-2">Purpose</div>
-                <div><?= e($request['purpose_of_visit']) ?></div>
-            </div>
-            <div class="mt-4 p-3 rounded-4 border bg-light">
-                <div class="fw-semibold mb-1">QR Reference</div>
-                <div><?= e($request['qr_reference']) ?></div>
-            </div>
-        <?php endif; ?>
-    </div>
-</div>
-<?php if (!empty($vehicles)): ?>
-<div class="gh-card p-4 mt-3">
-    <h5 class="mb-3">Vehicles</h5>
-    <div class="list-group">
-        <?php foreach ($vehicles as $vehicle): ?>
-            <div class="list-group-item d-flex justify-content-between align-items-center">
-                <span><?= e(strtoupper($vehicle['plate_number'])) ?></span>
-                <span class="text-muted"><?= e(ucfirst($vehicle['vehicle_type'])) ?> · <?= (int)($vehicle['people_count'] ?? 1) ?> people</span>
-            </div>
-        <?php endforeach; ?>
-    </div>
-</div>
-<?php endif; ?>
-
-<?php
-include app_path('views/layouts/footer.php');
-/* BISM4RCK/KUN3H0 2026 */
-// BISM4RCK/KUN3H0 2026
+<?php include app_path('views/layouts/header.php'); ?>
+<div class="container-fluid"><div class="row justify-content-center"><div class="col-xl-8"><div class="gh-card p-4 p-lg-5">
+<div class="d-flex justify-content-between align-items-start gap-3"><div><h2>Visitor Status</h2><div class="text-muted">Use the Visitor ID or credential again any time to refresh this status.</div></div><a class="btn btn-outline-secondary rounded-pill" href="<?=e(url('visitor/id.php'))?>">Visitor ID</a></div>
+<?php if(!$request): ?><div class="alert alert-danger mt-4">Visitor ID or request was not found.</div><?php else: ?>
+<div class="row g-3 mt-2"><div class="col-md-4"><div class="gh-stat"><div class="label">Visitor ID</div><div class="value" style="font-size:1.5rem;letter-spacing:.12em"><?=e($credential['visitor_id']??'—')?></div></div></div><div class="col-md-4"><div class="gh-stat"><div class="label">Status</div><div class="mt-2"><span class="badge rounded-pill <?=e(gate_badge($request['status']))?> fs-6"><?=e(strtoupper($request['status']))?></span></div></div></div><div class="col-md-4"><div class="gh-stat"><div class="label">House</div><div class="value" style="font-size:1.35rem"><?=e($request['house_number'])?></div></div></div></div>
+<div class="mt-4"><h5><?=e($request['visitor_name'])?></h5><p class="text-muted mb-1"><?=e($request['purpose_of_visit'])?></p><?php if($request['status']==='rejected'): ?><div class="alert alert-danger mt-3">Rejected<?=!empty($request['rejection_reason'])?': '.e($request['rejection_reason']):'.'?></div><?php elseif($request['status']==='pending'): ?><div class="alert alert-warning mt-3">Waiting for resident validation/approval.</div><?php elseif($request['status']==='approved'): ?><div class="alert alert-success mt-3">Approved. This credential can be scanned repeatedly at the gate.</div><?php endif; ?></div>
+<div class="mt-4"><h5>Registered vehicle(s)</h5><div class="table-responsive"><table class="table gh-table"><thead><tr><th>Plate</th><th>Type</th><th>People</th></tr></thead><tbody><?php foreach($vehicles as $v): ?><tr><td><?=e($v['plate_number'])?></td><td><?=e($v['vehicle_type'])?></td><td><?=e($v['people_count'])?></td></tr><?php endforeach; ?></tbody></table></div></div>
+<?php if($credential): ?><div class="credential-print-sheet"><div class="row g-3 mt-2"><div class="col-md-6"><div class="credential-card"><h6>QR Credential</h6><div id="visitorQr" class="credential-code"></div><div class="small text-muted mt-2">Screenshot this QR and give it to the visitor.</div></div></div><div class="col-md-6"><div class="credential-card"><h6>Barcode</h6><svg id="visitorBarcode" class="w-100"></svg><div class="small text-muted mt-2">The same credential can be scanned more than once.</div></div></div></div><div class="mt-3 text-center"><button class="btn btn-outline-secondary rounded-pill" onclick="window.print()">Print / Save credentials</button></div><script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script><script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script><script>document.addEventListener('DOMContentLoaded',()=>{new QRCode(document.getElementById('visitorQr'),{text:<?=json_encode(url('visitor/status.php?id='.rawurlencode($credential['visitor_id'])))?>,width:220,height:220,correctLevel:QRCode.CorrectLevel.M});JsBarcode('#visitorBarcode',<?=json_encode($credential['barcode_token'])?>,{format:'CODE128',displayValue:true,height:90,margin:10});});</script></div><?php endif; ?>
+<?php endif; ?></div></div></div></div><?php include app_path('views/layouts/footer.php'); ?>
+/* BISM4RCK-KUN3H0 2026 */

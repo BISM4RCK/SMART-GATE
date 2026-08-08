@@ -27,7 +27,7 @@ include app_path('views/layouts/header.php');
             <div class="gh-card p-4 h-100">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h5 class="mb-0">Visitor requests</h5>
-                    <a class="small" href="<?= e(url('visitor/register.php')) ?>">Add request</a>
+                    <a class="small" href="<?= e(url('resident/visitor.php')) ?>">Pre-register visitor</a>
                 </div>
                 <div class="table-responsive">
                     <table class="table gh-table align-middle">
@@ -51,6 +51,7 @@ include app_path('views/layouts/header.php');
             <div class="gh-card p-4 h-100">
                 <h5 class="mb-3">Quick links</h5>
                 <div class="d-grid gap-2">
+                    <a class="btn gh-btn-soft text-start" href="<?= e(url('resident/visitor.php')) ?>"><i class="bi bi-person-plus me-2"></i>Pre-register visitor</a>
                     <a class="btn gh-btn-soft text-start" href="<?= e(url('resident/vehicles.php')) ?>"><i class="bi bi-car-front me-2"></i>Vehicles</a>
                     <a class="btn gh-btn-soft text-start" href="<?= e(url('resident/requests.php')) ?>"><i class="bi bi-person-lines-fill me-2"></i>Requests</a>
                     <a class="btn gh-btn-soft text-start" href="<?= e(url('resident/tickets.php')) ?>"><i class="bi bi-chat-left-text me-2"></i>Tickets</a>
@@ -75,13 +76,7 @@ include app_path('views/layouts/header.php');
                 <input class="form-control" name="message" placeholder="Write the trouble here..." required>
             </div>
             <div class="col-12">
-                
-<div class="mb-3">
-  <label for="people_in_vehicle" class="form-label">People in vehicle</label>
-  <input type="number" class="form-control" id="people_in_vehicle"
-         name="people_in_vehicle" min="1" step="1" required>
-</div>
-<button class="btn gh-primary rounded-pill" type="submit">Create ticket</button>
+                <button class="btn gh-primary rounded-pill" type="submit">Create ticket</button>
             </div>
         </form>
     </div>
@@ -90,3 +85,4 @@ include app_path('views/layouts/header.php');
 include app_path('views/layouts/footer.php');
 /* BISM4RCK/KUN3H0 2026 */
 // BISM4RCK/KUN3H0 2026
+/* BISM4RCK-KUN3H0 2026 */

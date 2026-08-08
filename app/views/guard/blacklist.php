@@ -8,3 +8,4 @@ include app_path('views/layouts/header.php');
 <div class="col-lg-7"><div class="gh-card p-4"><h5>Active entries</h5><?php foreach($blacklist as $b): ?><div class="border rounded-3 p-3 mb-2 d-flex justify-content-between gap-3"><div><div class="fw-semibold"><?= e($b['plate_number'] ?: $b['visitor_name']) ?></div><div class="small text-muted"><?= e($b['reason']) ?></div></div><form method="post" onsubmit="return confirm('Remove this blacklist entry?')"><?= csrf_field() ?><input type="hidden" name="action" value="remove"><input type="hidden" name="blacklist_id" value="<?= (int)$b['id'] ?>"><button class="btn btn-sm btn-outline-success">Remove</button></form></div><?php endforeach; ?><?php if(!$blacklist): ?><div class="text-muted">No blacklist entries.</div><?php endif; ?></div></div></div></div>
 <?php include app_path('views/layouts/footer.php'); /* BISM4RCK/KUN3H0 2026 */ ?>
 <!-- BISM4RCK/KUN3H0 2026 -->
+/* BISM4RCK-KUN3H0 2026 */
