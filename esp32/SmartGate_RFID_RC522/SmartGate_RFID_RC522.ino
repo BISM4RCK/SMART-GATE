@@ -82,10 +82,10 @@ void loop(){
   if(isBurn){int cp=response.indexOf("\"credential_code\":\"");if(cp>=0){cp+=19;int cq=response.indexOf('"',cp);if(cq>cp)burnCode=response.substring(cp,cq);}}
   Serial.println(isBurn?"RFID BURN: Present card...":"RFID SCAN: Present card...");
   String uid;
-  if(!waitForCard(uid)){Serial.println("ERROR! RFID scan timed out.");activeSession="";continue;}
-  if(isBurn && (burnCode=="" || !writeProfile(burnCode))){Serial.println("ERROR! Could not write the RFID profile to the card. Server credential was not changed.");haltCard();activeSession="";continue;}
+  if(!waitForCard(uid)){Serial.println("ERROR! RFID scan timed out.");activeSession="";return;}
+  if(isBurn && (burnCode=="" || !writeProfile(burnCode))){Serial.println("ERROR! Could not write the RFID profile to the card. Server credential was not changed.");haltCard();activeSession="";return;}
   String body="session_id="+urlEncode(activeSession)+"&rfid_uid="+urlEncode(uid);
-  if(!apiPost("/api/esp32/submit_rfid_scan.php",body,response,status)){Serial.printf("ERROR! Server response HTTP %d\n",status);if(isBurn)clearProfile();activeSession="";haltCard();continue;}
+  if(!apiPost("/api/esp32/submit_rfid_scan.php",body,response,status)){Serial.printf("ERROR! Server response HTTP %d\n",status);if(isBurn)clearProfile();activeSession="";haltCard();return;}
   bool ok=response.indexOf("\"ok\":true")>=0;
   if(isBurn && ok){Serial.println("RFID BURNED SUCCESSFULLY: "+burnCode);}
   else if(ok && response.indexOf("\"gate_opened\":true")>=0){Serial.println("GATE OPENED");openGate();}
