@@ -6,7 +6,7 @@ include app_path('views/layouts/header.php');
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
         <div>
             <h2 class="mb-1">Account Management</h2>
-            <div class="text-muted">Manage resident and staff accounts separately.</div>
+            <div class="text-muted">Manage resident and staff accounts separately, including administrator-controlled password resets and username changes.</div>
         </div>
     </div>
 
@@ -115,7 +115,7 @@ include app_path('views/layouts/header.php');
             <?php if (($accountType ?? 'all') !== 'resident'): ?>
             <div class="gh-card p-4">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div><h5 class="mb-1">Staff Accounts</h5><div class="small text-muted">Guards and administrators</div></div>
+                    <div><h5 class="mb-1">Staff Accounts</h5><div class="small text-muted">Guards and administrators are grouped together as staff.</div></div>
                     <span class="badge text-bg-dark"><?= count($guards) + count($admins) ?></span>
                 </div>
                 <div class="table-responsive">

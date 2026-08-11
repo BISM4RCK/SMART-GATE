@@ -65,3 +65,51 @@ CREATE TABLE IF NOT EXISTS walk_in_visitor_vehicles (
  KEY idx_walkin_vehicle(walk_in_id),
  CONSTRAINT fk_walkin_vehicle_walkin FOREIGN KEY(walk_in_id) REFERENCES walk_in_visitors(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- RFID account profiles for resident/staff credentials.
+CREATE TABLE IF NOT EXISTS rfid_cards (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ user_id BIGINT UNSIGNED NOT NULL,
+ uid VARCHAR(100) NULL,
+ credential_code VARCHAR(100) NULL,
+ status ENUM('active','void') NOT NULL DEFAULT 'active',
+ issued_by BIGINT UNSIGNED NULL,
+ issued_at DATETIME NULL,
+ voided_by BIGINT UNSIGNED NULL,
+ voided_at DATETIME NULL,
+ notes VARCHAR(255) NULL,
+ created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ UNIQUE KEY uq_rfid_uid(uid),
+ KEY idx_rfid_user(user_id), KEY idx_rfid_status(status),
+ CONSTRAINT fk_rfid_card_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+ CONSTRAINT fk_rfid_card_issued_by FOREIGN KEY(issued_by) REFERENCES users(id) ON DELETE SET NULL,
+ CONSTRAINT fk_rfid_card_voided_by FOREIGN KEY(voided_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE rfid_scan_sessions (
+    id CHAR(32) PRIMARY KEY,
+    device_id VARCHAR(64) NOT NULL,
+    actor_user_id BIGINT UNSIGNED NOT NULL,
+    actor_role ENUM('guard','admin') NOT NULL,
+    purpose ENUM('gate','burn') NOT NULL DEFAULT 'gate',
+    target_user_id BIGINT UNSIGNED NULL,
+    notes VARCHAR(255) NULL,
+    status ENUM('waiting','submitted','approved','error','expired') NOT NULL DEFAULT 'waiting',
+    rfid_uid VARCHAR(100) NULL,
+    result_json LONGTEXT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,
+    KEY idx_rfid_scan_device_status(device_id,status,expires_at),
+    KEY idx_rfid_scan_target(target_user_id),
+    CONSTRAINT fk_rfid_scan_target FOREIGN KEY(target_user_id) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_rfid_scan_actor FOREIGN KEY(actor_user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- RFID gate scan updates for existing Smart Gate installations.
+ALTER TABLE rfid_cards ADD COLUMN IF NOT EXISTS credential_code VARCHAR(100) NULL;
+CREATE TABLE IF NOT EXISTS rfid_scan_sessions (
+ id CHAR(32) PRIMARY KEY, device_id VARCHAR(64) NOT NULL, actor_user_id BIGINT UNSIGNED NOT NULL, actor_role ENUM('guard','admin') NOT NULL, purpose ENUM('gate','burn') NOT NULL DEFAULT 'gate', target_user_id BIGINT UNSIGNED NULL, notes VARCHAR(255) NULL, status ENUM('waiting','submitted','approved','error','expired') NOT NULL DEFAULT 'waiting', rfid_uid VARCHAR(100) NULL, result_json LONGTEXT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, expires_at DATETIME NOT NULL, KEY idx_rfid_scan_device_status(device_id,status,expires_at), KEY idx_rfid_scan_target(target_user_id), CONSTRAINT fk_rfid_scan_target FOREIGN KEY(target_user_id) REFERENCES users(id) ON DELETE SET NULL, CONSTRAINT fk_rfid_scan_actor FOREIGN KEY(actor_user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

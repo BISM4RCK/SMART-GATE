@@ -262,6 +262,11 @@ class GuardController
         $me=current_user(); $target='guard/scan.php';
         if ($_SERVER['REQUEST_METHOD']==='POST') {
             csrf_validate();
+            $action=strtolower(trim($_POST['action']??''));
+            if($action==='start_rfid_scan'){
+                $sessionId=RfidScanSessionModel::create(ESP32_DEVICE_ID,(int)$me['id'],'guard');
+                json_response(['ok'=>true,'session_id'=>$sessionId,'message'=>'Waiting for RFID scan...']);
+            }
             $rfid=trim($_POST['rfid_uid']??''); $qr=trim($_POST['qr_token']??''); $barcode=trim($_POST['barcode_token']??'');
             if($rfid===''&&$qr===''&&$barcode===''){flash_set('warning','Scan an RFID, QR, or barcode credential.');redirect($target);}
             $result=GateLogModel::createAccess(['rfid_uid'=>$rfid,'qr_token'=>$qr,'barcode_token'=>$barcode,'event_type'=>$qr?'qr_scan':($barcode?'barcode_scan':'rfid_scan'),'source_device'=>'guard-panel','guard_id'=>(int)$me['id'],'actor_user_id'=>(int)$me['id'],'actor_role'=>$me['role'],'raw_payload'=>$_POST]);
@@ -270,6 +275,17 @@ class GuardController
             redirect($target);
         }
         View::render('guard/scan',['pageTitle'=>'Quick Scan','logs'=>GateLogModel::recent(10),'requests'=>VisitorRequestModel::all()]);
+    }
+
+    public function scanResult(): void
+    {
+        require_role('guard');
+        $me=current_user(); $id=trim((string)($_GET['session_id']??''));
+        if($id==='') json_response(['ok'=>false,'message'=>'Missing scan session.'],422);
+        $session=RfidScanSessionModel::get($id,(int)$me['id']);
+        if(!$session) json_response(['ok'=>false,'message'=>'Scan session not found.'],404);
+        $result=$session['result_json']?json_decode($session['result_json'],true):null;
+        json_response(['ok'=>true,'status'=>$session['status'],'result'=>$result,'message'=>$result['message']??null]);
     }
 
     public function walkIn(): void
@@ -343,6 +359,56 @@ class AdminController
         require_role('admin');$filters=['event_type'=>trim($_GET['event_type']??''),'gate_status'=>trim($_GET['gate_status']??''),'actor_user_id'=>trim($_GET['actor_user_id']??''),'search'=>trim($_GET['search']??'')];
         View::render('admin/logs',['pageTitle'=>'Gate Logs','logs'=>GateLogModel::all($filters),'filters'=>$filters,'actors'=>array_merge(UserModel::byRole('guard'),UserModel::byRole('admin'))]);
     }
+    public function rfid(): void
+    {
+        require_role('admin'); $me=current_user();
+        if($_SERVER['REQUEST_METHOD']==='POST'){
+            csrf_validate(); $action=strtolower(trim($_POST['action']??''));
+            try{
+                if($action==='assign'){
+                    $userId=(int)($_POST['user_id']??0); $target=UserModel::findById($userId);
+                    if(!$target || !in_array($target['role'],['resident','guard','admin'],true) || ($target['status']??'active')!=='active') throw new RuntimeException('Select a valid active resident or staff account.');
+                    $sessionId=RfidScanSessionModel::create(ESP32_DEVICE_ID,(int)$me['id'],'admin','burn',$userId,trim($_POST['notes']??''));
+                    json_response(['ok'=>true,'session_id'=>$sessionId,'credential_code'=>RfidCardModel::profileCodeForUser($target),'message'=>'Waiting for RFID card...']);
+                } elseif($action==='void'){
+                    $cardId=(int)($_POST['rfid_card_id']??0); $card=RfidCardModel::all(['status'=>'active','search'=>'']); $target=null; foreach($card as $row){if((int)$row['id']===$cardId){$target=$row;break;}}
+                    if(!$target) throw new RuntimeException('Active RFID profile not found.');
+                    if(RfidCardModel::void($cardId,(int)$me['id'],trim($_POST['notes']??''))){activity_log('rfid_voided','RFID '.($target['uid']??'').' voided for '.$target['email'].'; physical card must be rewritten using compatible RFID hardware.');flash_set('success','RFID profile voided. It can no longer validate at the gate.');} else throw new RuntimeException('RFID profile could not be voided.');
+                }
+            }catch(Throwable $e){flash_set('danger',$e->getMessage());}
+            redirect('admin/rfid.php');
+        }
+        $filters=['account_type'=>strtolower(trim($_GET['account_type']??'')),'status'=>strtolower(trim($_GET['status']??'')),'search'=>trim($_GET['search']??'')];
+        if(!in_array($filters['account_type'],['resident','staff'],true))$filters['account_type']='';
+        if(!in_array($filters['status'],['active','void'],true))$filters['status']='';
+        $accounts=UserModel::all();
+        $cards=RfidCardModel::all($filters);
+        View::render('admin/rfid',['pageTitle'=>'RFID Management','cards'=>$cards,'accounts'=>$accounts,'filters'=>$filters]);
+    }
+
+    public function rfidScan(): void
+    {
+        require_role('admin');
+        $me=current_user(); $target='admin/rfid-scan.php';
+        if($_SERVER['REQUEST_METHOD']==='POST'){
+            csrf_validate();
+            if(strtolower(trim($_POST['action']??''))==='start_rfid_scan'){
+                $sessionId=RfidScanSessionModel::create(ESP32_DEVICE_ID,(int)$me['id'],'admin','gate');
+                json_response(['ok'=>true,'session_id'=>$sessionId,'message'=>'Waiting for RFID scan...']);
+            }
+        }
+        View::render('admin/rfid_scan',['pageTitle'=>'RFID Gate Scan','logs'=>GateLogModel::recent(10)]);
+    }
+
+    public function rfidScanResult(): void
+    {
+        require_role('admin'); $me=current_user(); $id=trim((string)($_GET['session_id']??''));
+        if($id==='') json_response(['ok'=>false,'message'=>'Missing scan session.'],422);
+        $session=RfidScanSessionModel::get($id,(int)$me['id']); if(!$session) json_response(['ok'=>false,'message'=>'Scan session not found.'],404);
+        $result=$session['result_json']?json_decode($session['result_json'],true):null;
+        json_response(['ok'=>true,'status'=>$session['status'],'result'=>$result,'message'=>$result['message']??null]);
+    }
+
     public function activityLogs(): void
     {
         require_role('admin');$filters=['account_type'=>trim($_GET['account_type']??''),'user_id'=>trim($_GET['user_id']??''),'action'=>trim($_GET['action']??'')];
@@ -432,6 +498,84 @@ class NotificationController
 
 class Esp32Controller
 {
+    private function requireEsp32Key(): void
+    {
+        $provided = trim((string)($_SERVER['HTTP_X_SMART_GATE_KEY'] ?? $_POST['device_key'] ?? $_GET['device_key'] ?? ''));
+        $deviceId = trim((string)($_SERVER['HTTP_X_SMART_GATE_DEVICE'] ?? $_POST['device_id'] ?? $_GET['device_id'] ?? ''));
+        if ($provided === '' || !hash_equals((string)ESP32_API_KEY, $provided)) json_response(['ok' => false, 'message' => 'Unauthorized RFID device.'], 401);
+        if ($deviceId === '' || !hash_equals((string)ESP32_DEVICE_ID, $deviceId)) json_response(['ok' => false, 'message' => 'Unknown RFID device.'], 401);
+    }
+
+    public function pollScan(): void
+    {
+        $this->requireEsp32Key();
+        if ($_SERVER['REQUEST_METHOD'] !== 'GET') json_response(['ok'=>false,'message'=>'Method not allowed'],405);
+        $session=RfidScanSessionModel::waitingForDevice(ESP32_DEVICE_ID);
+        $payload=['ok'=>true,'scan_requested'=>(bool)$session,'session_id'=>$session['id']??null,'purpose'=>$session['purpose']??'gate'];
+        if($session && ($session['purpose']??'gate')==='burn'){ $target=UserModel::findById((int)$session['target_user_id']); $payload['credential_code']=$target?RfidCardModel::profileCodeForUser($target):null; }
+        json_response($payload);
+    }
+
+    public function submitScan(): void
+    {
+        $this->requireEsp32Key();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') json_response(['ok'=>false,'message'=>'Method not allowed'],405);
+        $sessionId=trim((string)($_POST['session_id']??'')); $uid=strtoupper(trim((string)($_POST['rfid_uid']??'')));
+        if(!preg_match('/^[a-f0-9:.-]{4,100}$/i',$uid) || $sessionId==='') json_response(['ok'=>false,'message'=>'Invalid scan payload.'],422);
+        $s=Database::pdo()->prepare("SELECT * FROM rfid_scan_sessions WHERE id=? AND device_id=? AND status='waiting' AND expires_at>NOW() LIMIT 1"); $s->execute([$sessionId,ESP32_DEVICE_ID]); $session=$s->fetch();
+        if(!$session) json_response(['ok'=>false,'message'=>'Scan session expired or already completed.'],409);
+        if(($session['purpose']??'gate')==='burn'){
+            $target=UserModel::findById((int)$session['target_user_id']);
+            if(!$target || !in_array($target['role'],['resident','guard','admin'],true) || ($target['status']??'active')!=='active'){
+                RfidScanSessionModel::finish($sessionId,'error',['notes'=>'Target RFID account is invalid or inactive.']);
+                json_response(['ok'=>false,'message'=>'Target RFID account is invalid or inactive.'],422);
+            }
+            try{
+                $credential=RfidCardModel::profileCodeForUser($target);
+                $id=RfidCardModel::assign((int)$target['id'],$uid,null,'ESP32 RC522 RFID burn', $credential);
+                AccountActivityLogModel::record((int)$session['actor_user_id'],$session['actor_role'],null,'rfid_programmed','RFID '.$uid.' assigned to '.$target['email'].' as '.$credential.' (profile #'.$id.')');
+                $result=['gate_opened'=>false,'rfid_uid'=>$uid,'rfid_card_id'=>$id,'credential_code'=>$credential,'account'=>$target['full_name'],'role'=>$target['role'],'notes'=>'RFID burn authorized.'];
+                RfidScanSessionModel::finish($sessionId,'approved',$result);
+                json_response(['ok'=>true,'burn'=>true,'write_profile'=>true,'credential_code'=>$credential,'result'=>$result]);
+            }catch(Throwable $e){RfidScanSessionModel::finish($sessionId,'error',['notes'=>$e->getMessage()]);json_response(['ok'=>false,'message'=>$e->getMessage()],409);}
+        }
+        $result=GateLogModel::createAccess(['rfid_uid'=>$uid,'event_type'=>'rfid_scan','source_device'=>'esp32-'.ESP32_DEVICE_ID,'actor_user_id'=>(int)$session['actor_user_id'],'actor_role'=>$session['actor_role'],'raw_payload'=>['session_id'=>$sessionId,'rfid_uid'=>$uid,'device_id'=>ESP32_DEVICE_ID]]);
+        $approved=in_array($result['gate_status'],['approved','manual_override'],true);
+        RfidScanSessionModel::finish($sessionId,$approved?'approved':'error',$result+['rfid_uid'=>$uid]);
+        AccountActivityLogModel::record((int)$session['actor_user_id'],$session['actor_role'],null,'rfid_gate_scan',$result['notes']);
+        json_response(['ok'=>true,'gate_opened'=>$approved,'message'=>$approved?'Gate opened successfully.':('ERROR! '.$result['notes']),'result'=>$result]);
+    }
+
+    public function enrollRfid(): void
+    {
+        $this->requireEsp32Key();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') json_response(['ok'=>false,'message'=>'Method not allowed'],405);
+        $uid = strtoupper(trim((string)($_POST['rfid_uid'] ?? '')));
+        $userId = (int)($_POST['user_id'] ?? 0);
+        if ($uid === '' || !preg_match('/^[A-F0-9:._-]{4,100}$/i', $uid)) json_response(['ok'=>false,'message'=>'Invalid RFID UID.'],422);
+        $target = UserModel::findById($userId);
+        if (!$target || !in_array($target['role'], ['resident','guard','admin'], true) || ($target['status'] ?? 'active') !== 'active') json_response(['ok'=>false,'message'=>'Invalid or inactive account.'],422);
+        try {
+            $id = RfidCardModel::assign($userId, $uid, null, 'ESP32 RC522 programming');
+            AccountActivityLogModel::record(null, 'device', 'ESP32 RFID Reader', 'rfid_programmed', 'RFID '.$uid.' assigned to '.$target['email'].' (profile #'.$id.')');
+            json_response(['ok'=>true,'rfid_card_id'=>$id,'uid'=>$uid,'user_id'=>$userId,'account'=>$target['full_name'],'role'=>$target['role']]);
+        } catch (Throwable $e) { json_response(['ok'=>false,'message'=>$e->getMessage()],409); }
+    }
+
+    public function voidRfid(): void
+    {
+        $this->requireEsp32Key();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') json_response(['ok'=>false,'message'=>'Method not allowed'],405);
+        $uid = strtoupper(trim((string)($_POST['rfid_uid'] ?? '')));
+        if ($uid === '' || !preg_match('/^[A-F0-9:._-]{4,100}$/i', $uid)) json_response(['ok'=>false,'message'=>'Invalid RFID UID.'],422);
+        $card = RfidCardModel::findActiveByUid($uid);
+        if (!$card) json_response(['ok'=>false,'message'=>'No active Smart Gate RFID profile exists for this UID.'],404);
+        $stmt = Database::pdo()->prepare("UPDATE rfid_cards SET uid=NULL,status='void',voided_by=NULL,voided_at=NOW(),notes=CASE WHEN notes IS NULL OR notes='' THEN 'Voided by ESP32 RC522 reader' ELSE CONCAT(notes,' | Voided by ESP32 RC522 reader') END WHERE id=? AND status='active'");
+        $stmt->execute([(int)$card['id']]);
+        AccountActivityLogModel::record(null, 'device', 'ESP32 RFID Reader', 'rfid_voided', 'RFID '.$uid.' voided for '.$card['email'].' (profile #'.$card['id'].')');
+        json_response(['ok'=>true,'rfid_card_id'=>(int)$card['id'],'uid'=>$uid,'account'=>$card['full_name'],'role'=>$card['role'],'status'=>'void']);
+    }
+
     public function logAccess(): void
     {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {

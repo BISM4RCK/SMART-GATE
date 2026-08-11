@@ -130,7 +130,7 @@ class UserModel
     }
     public static function all(): array
     {
-        return Database::pdo()->query("SELECT * FROM users ORDER BY full_name ASC")->fetchAll();
+        return Database::pdo()->query("SELECT u.*,r.house_number,r.block_number,r.lot_number,r.household_letter FROM users u LEFT JOIN residents r ON r.user_id=u.id ORDER BY u.full_name ASC")->fetchAll();
     }
     public static function touchLogin(int $id): void
     {
@@ -265,6 +265,99 @@ class VehicleModel
         ");
         $stmt->execute([$rfid]);
         return $stmt->fetch() ?: null;
+    }
+}
+
+class RfidCardModel
+{
+    public static function all(array $filters = []): array
+    {
+        $where=[]; $params=[];
+        $accountType=strtolower(trim($filters['account_type'] ?? ''));
+        $status=strtolower(trim($filters['status'] ?? ''));
+        $search=trim($filters['search'] ?? '');
+        if($accountType==='resident') { $where[]="u.role='resident'"; }
+        elseif($accountType==='staff') { $where[]="u.role IN ('guard','admin')"; }
+        if(in_array($status,['active','void'],true)) { $where[]='rc.status=?'; $params[]=$status; }
+        if($search!=='') { $where[]='(u.full_name LIKE ? OR u.email LIKE ? OR rc.uid LIKE ? OR rc.credential_code LIKE ? OR rc.notes LIKE ?)'; $term='%'.$search.'%'; array_push($params,$term,$term,$term,$term,$term); }
+        $sql="SELECT rc.*,u.full_name,u.email,u.role,ub.full_name AS issued_by_name,vb.full_name AS voided_by_name,r.house_number,r.block_number,r.lot_number,r.household_letter FROM rfid_cards rc JOIN users u ON u.id=rc.user_id LEFT JOIN residents r ON r.user_id=u.id LEFT JOIN users ub ON ub.id=rc.issued_by LEFT JOIN users vb ON vb.id=rc.voided_by";
+        if($where) $sql.=' WHERE '.implode(' AND ',$where);
+        $sql.=' ORDER BY rc.created_at DESC';
+        $st=Database::pdo()->prepare($sql); $st->execute($params); return $st->fetchAll();
+    }
+
+    public static function activeForUser(int $userId): array
+    {
+        $s=Database::pdo()->prepare("SELECT * FROM rfid_cards WHERE user_id=? AND status='active' ORDER BY created_at DESC");
+        $s->execute([$userId]); return $s->fetchAll();
+    }
+
+    public static function findByUid(string $uid): ?array
+    {
+        $s=Database::pdo()->prepare("SELECT rc.*,u.full_name,u.email,u.role FROM rfid_cards rc JOIN users u ON u.id=rc.user_id WHERE rc.uid=? AND rc.status='active' AND u.status='active' LIMIT 1");
+        $s->execute([trim($uid)]); return $s->fetch() ?: null;
+    }
+
+    public static function findActiveByUid(string $uid): ?array { return self::findByUid($uid); }
+
+    public static function profileCodeForUser(array $user): string
+    {
+        $role=strtolower((string)($user['role']??''));
+        if($role==='resident'){
+            $house=trim((string)($user['house_number']??''));
+            if($house===''){
+                $resident=ResidentModel::findByUserId((int)$user['id']);
+                $house=trim((string)($resident['house_number']??''));
+            }
+            $house=preg_replace('/\s+/', '', $house);
+            $house=str_replace('--','-', $house);
+            return 'res00'.$house;
+        }
+        $prefix=$role==='admin'?'adm':'grd';
+        return $prefix.'00'.(int)$user['id'];
+    }
+
+    public static function assign(int $userId,string $uid,?int $issuedBy,string $notes='', ?string $credentialCode=null): int
+    {
+        $uid=strtoupper(trim($uid));
+        if($uid==='') throw new RuntimeException('RFID UID is required.');
+        $existing=self::findByUid($uid);
+        if($existing) throw new RuntimeException('That RFID UID is already assigned to '.($existing['full_name'] ?? 'another account').'.');
+        $user=UserModel::findById($userId);
+        if(!$user) throw new RuntimeException('RFID account not found.');
+        if($credentialCode===null || trim($credentialCode)==='') $credentialCode=self::profileCodeForUser($user);
+        $credentialCode=trim($credentialCode);
+        $old=Database::pdo()->prepare("UPDATE rfid_cards SET uid=NULL,status='void',voided_by=?,voided_at=NOW(),notes=CASE WHEN notes IS NULL OR notes='' THEN 'Replaced by a new RFID credential' ELSE CONCAT(notes,' | Replaced by a new RFID credential') END WHERE user_id=? AND status='active'"); $old->execute([$issuedBy,$userId]);
+        $s=Database::pdo()->prepare("INSERT INTO rfid_cards (user_id,uid,credential_code,status,issued_by,issued_at,notes) VALUES (?,?,?,'active',?,NOW(),?)");
+        $s->execute([$userId,$uid,$credentialCode,$issuedBy,trim($notes)?:null]); return (int)Database::pdo()->lastInsertId();
+    }
+
+    public static function void(int $id,int $voidedBy,string $notes=''): bool
+    {
+        $s=Database::pdo()->prepare("UPDATE rfid_cards SET uid=NULL,status='void',voided_by=?,voided_at=NOW(),notes=CASE WHEN ?<>'' THEN ? ELSE notes END WHERE id=? AND status='active'");
+        $s->execute([$voidedBy,trim($notes),trim($notes),$id]); return $s->rowCount()>0;
+    }
+}
+
+class RfidScanSessionModel
+{
+    public static function create(string $deviceId, int $actorUserId, string $actorRole, string $purpose='gate', ?int $targetUserId=null, string $notes=''): string
+    {
+        $id=bin2hex(random_bytes(16));
+        $s=Database::pdo()->prepare("INSERT INTO rfid_scan_sessions (id,device_id,actor_user_id,actor_role,purpose,target_user_id,notes,status,created_at,expires_at) VALUES (?,?,?,?,?,?,?,'waiting',NOW(),DATE_ADD(NOW(),INTERVAL 60 SECOND))");
+        $s->execute([$id,$deviceId,$actorUserId,$actorRole,$purpose,$targetUserId,trim($notes)?:null]); return $id;
+    }
+    public static function waitingForDevice(string $deviceId): ?array
+    {
+        $s=Database::pdo()->prepare("SELECT * FROM rfid_scan_sessions WHERE device_id=? AND status='waiting' AND expires_at>NOW() ORDER BY created_at ASC LIMIT 1"); $s->execute([$deviceId]); return $s->fetch() ?: null;
+    }
+    public static function get(string $id,int $actorUserId): ?array
+    {
+        $sql="SELECT * FROM rfid_scan_sessions WHERE id=?"; $params=[$id]; if($actorUserId>0){$sql.=' AND actor_user_id=?';$params[]=$actorUserId;} $sql.=' LIMIT 1'; $s=Database::pdo()->prepare($sql); $s->execute($params); $row=$s->fetch() ?: null; if($row && $row['status']==='waiting' && strtotime($row['expires_at'])<time()){ self::finish($id,'expired',['notes'=>'RFID scan timed out.']); $row['status']='expired'; $row['result_json']=json_encode(['notes'=>'RFID scan timed out.']); } return $row;
+    }
+    public static function finish(string $id,string $status,array $result=[]): void
+    {
+        $s=Database::pdo()->prepare("UPDATE rfid_scan_sessions SET status=?,result_json=?,updated_at=NOW() WHERE id=?"); $s->execute([$status,json_encode($result,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),$id]);
     }
 }
 
@@ -505,16 +598,26 @@ class GateLogModel
     {
         $pdo=Database::pdo(); $rfid=trim((string)($payload['rfid_uid']??'')); $qr=trim((string)($payload['qr_token']??'')); $barcode=trim((string)($payload['barcode_token']??''));
         $event=strtolower((string)($payload['event_type']??(($qr||$barcode)?'qr_scan':'rfid_scan'))); $source=trim((string)($payload['source_device']??'guard-panel')); $manual=bool_from_input($payload['manual_override']??'0');
-        $matched=null;$visitor=null;$walkIn=null; if($qr!=='')$visitor=VisitorCredentialModel::findByToken($qr,'qr'); if(!$visitor&&$barcode!==''){$visitor=VisitorCredentialModel::findByToken($barcode,'barcode');if(!$visitor)$walkIn=WalkInVisitorModel::findByToken($barcode);} if(!$walkIn&&!empty($payload['visitor_id']))$walkIn=WalkInVisitorModel::findByVisitorId((string)$payload['visitor_id']); if($rfid!=='')$matched=VehicleModel::findByRfid($rfid);
-        $plate=!empty($payload['plate_number'])?trim((string)$payload['plate_number']):($matched['plate_number']??($walkIn['plate_number']??null)); if(!$matched&&$plate) $matched=VehicleModel::findByPlate($plate);
+        $matched=null;$rfidProfile=null;$visitor=null;$walkIn=null;
+        if($qr!=='')$visitor=VisitorCredentialModel::findByToken($qr,'qr');
+        if(!$visitor&&$barcode!==''){$visitor=VisitorCredentialModel::findByToken($barcode,'barcode');if(!$visitor)$walkIn=WalkInVisitorModel::findByToken($barcode);}
+        if(!$walkIn&&!empty($payload['visitor_id']))$walkIn=WalkInVisitorModel::findByVisitorId((string)$payload['visitor_id']);
+        if($rfid!==''){$rfidProfile=RfidCardModel::findByUid($rfid);if(!$rfidProfile)$matched=VehicleModel::findByRfid($rfid);}
+        $plate=!empty($payload['plate_number'])?trim((string)$payload['plate_number']):($matched['plate_number']??($walkIn['plate_number']??null));
+        if(!$matched&&$plate)$matched=VehicleModel::findByPlate($plate);
         $residentId=$matched['resident_id']??null;$vehicleId=($matched&&!empty($matched['resident_id']))?$matched['id']:null;$visitorRequestId=$visitor['visitor_request_id']??null;$walkInId=$walkIn['id']??null;
         if($visitor){$gateStatus=match($visitor['status']){'approved'=>'approved','pending'=>'pending','rejected'=>'denied',default=>'denied'};$notes='Visitor credential '.$visitor['visitor_id'].' is '.$visitor['status'];$event=$qr?'qr_scan':'barcode_scan';}
         elseif($walkIn){$gateStatus='approved';$notes='Walk-in visitor '.$walkIn['visitor_id'].' checked in';$event='walk_in_checkin';}
+        elseif($rfidProfile){
+            $gateStatus='approved';
+            $notes='Matched RFID profile for '.($rfidProfile['full_name']??$rfidProfile['email']??'account').' ('.strtoupper($rfidProfile['role']).')';
+            if(($rfidProfile['role']??'')==='resident'){ $rr=ResidentModel::findByUserId((int)$rfidProfile['user_id']); $residentId=$rr?(int)$rr['id']:null; }
+        }
         else {$blacklisted=$plate?BlacklistModel::isActivePlate($plate):false;$gateStatus=$blacklisted?'denied':($matched?'approved':'denied');$notes=$blacklisted?'Plate is on the active blacklist':($matched?'Matched '.($rfid?'RFID':'vehicle'):'No matching RFID/QR credential found');}
         if($manual){$gateStatus='manual_override';$notes='Manual gate override by authorized account';}
         $guardId=!empty($payload['guard_id'])?(int)$payload['guard_id']:null; $actorUserId=!empty($payload['actor_user_id'])?(int)$payload['actor_user_id']:($guardId?:null); $actorRole=trim((string)($payload['actor_role']??''))?:null; $raw=isset($payload['raw_payload'])?json_encode($payload['raw_payload'],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES):null;
         $s=$pdo->prepare('INSERT INTO gate_logs(resident_id,vehicle_id,visitor_request_id,walk_in_id,guard_id,actor_user_id,actor_role,rfid_uid,plate_number,event_type,gate_status,source_device,raw_payload,log_notes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)'); $s->execute([$residentId,$vehicleId,$visitorRequestId,$walkInId,$guardId,$actorUserId,$actorRole,$rfid?:null,$plate?:null,$event,$gateStatus,$source,$raw,$notes]);
-        return ['ok'=>true,'gate_status'=>$gateStatus,'matched'=>(bool)($matched||$visitor||$walkIn),'notes'=>$notes,'log_id'=>(int)$pdo->lastInsertId(),'visitor'=>$visitor,'walk_in'=>$walkIn];
+        return ['ok'=>true,'gate_status'=>$gateStatus,'matched'=>(bool)($matched||$rfidProfile||$visitor||$walkIn),'notes'=>$notes,'log_id'=>(int)$pdo->lastInsertId(),'visitor'=>$visitor,'walk_in'=>$walkIn];
     }
     public static function all(array $filters=[]): array { $where=[];$params=[]; if(($filters['event_type']??'')!==''){ $where[]='gl.event_type=?';$params[]=$filters['event_type']; } if(($filters['gate_status']??'')!==''){ $where[]='gl.gate_status=?';$params[]=$filters['gate_status']; } if(($filters['actor_user_id']??'')!==''){ $where[]='gl.actor_user_id=?';$params[]=(int)$filters['actor_user_id']; } if(($filters['search']??'')!==''){ $where[]='(gl.plate_number LIKE ? OR gl.rfid_uid LIKE ? OR gl.log_notes LIKE ?)';$term='%'.$filters['search'].'%';array_push($params,$term,$term,$term); } $sql='SELECT gl.*,u.full_name AS actor_name,u.role AS actor_role FROM gate_logs gl LEFT JOIN users u ON u.id=gl.actor_user_id';if($where)$sql.=' WHERE '.implode(' AND ',$where);$sql.=' ORDER BY gl.created_at DESC LIMIT 500';$st=Database::pdo()->prepare($sql);$st->execute($params);return $st->fetchAll(); }
 }

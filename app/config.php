@@ -18,6 +18,10 @@ if ($basePath === '/' ) $basePath='';
 
 define('BASE_URL', $basePath);
 
+// BISM4RCK-KUN3H0 2026
+define('ESP32_API_KEY', getenv('SMART_GATE_ESP32_KEY') ?: '2jGpAbQGBVW9qJU89UQjDxNAjNMtj2q-JsuvL9dE8Ig');
+define('ESP32_DEVICE_ID', getenv('SMART_GATE_ESP32_DEVICE_ID') ?: '180503');
+
 define('DB_HOST', '127.0.0.1');
 define('DB_PORT', '3306');
 define('DB_NAME', 'smart_gate');
