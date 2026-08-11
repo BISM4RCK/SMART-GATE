@@ -4,7 +4,7 @@
   <div class="d-flex justify-content-between align-items-center mb-3"><h2>RFID Gate Scan</h2><a class="btn btn-outline-secondary rounded-pill" href="<?=e(url('admin/rfid.php'))?>">RFID Management</a></div>
   <div class="row g-3">
     <div class="col-lg-5"><div class="gh-card p-4">
-      <h5>RFID</h5><p class="small text-muted">Press SCAN RFID. The system waits for the ESP32 + RC522 and captures the physical UID automatically.</p>
+      <h5>RFID</h5><p class="small text-muted">Scan an RFID card through the ESP32 + RC522 reader.</p>
       <button type="button" id="scanRfidBtn" class="btn gh-primary btn-lg w-100 py-4"><i class="bi bi-credit-card-2-front me-2"></i>SCAN RFID</button>
       <div id="rfidStatus" class="alert alert-secondary d-none mt-3" role="status" aria-live="polite"></div>
     </div></div>

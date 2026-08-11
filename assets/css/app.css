@@ -35,7 +35,7 @@ small,.small{color:var(--gh-muted)}
 .gh-btn-soft{border:1px solid var(--gh-border);background:#fff;border-radius:999px;padding:.45rem .95rem;color:var(--gh-text);}
 .gh-btn-soft:hover{background:#fbfbfb}
 .gh-app-shell{display:flex;min-height:calc(100vh - 72px)}
-.gh-sidebar{width:280px;background:#fff;border-right:1px solid var(--gh-border);position:sticky;top:72px;height:calc(100vh - 72px);}
+.gh-sidebar{width:280px;background:#fff;border-right:1px solid var(--gh-border);position:sticky;top:72px;align-self:flex-start;height:calc(100vh - 72px);overflow-y:auto;overflow-x:hidden;}
 .gh-sidebar-card,.gh-card,.gh-card-soft,.gh-stat{background:var(--gh-surface);border:1px solid var(--gh-border);border-radius:var(--gh-radius);box-shadow:var(--gh-shadow);}
 .gh-sidebar-card{padding:1rem}
 .gh-main{flex:1;min-width:0}
@@ -106,3 +106,6 @@ label{font-weight:600;margin-bottom:.35rem}
   .credential-print-sheet .credential-card { break-inside: avoid; box-shadow: none !important; border: 1px solid #ddd !important; }
   .credential-print-sheet .btn, .credential-print-sheet .small { display: none !important; }
 }
+
+/* BISM4RCK-KUN3H0 2026 */
+.gh-sidebar::-webkit-scrollbar{width:7px}.gh-sidebar::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:999px}.gh-sidebar-actions{padding-bottom:.25rem}.gh-sidebar .btn-ghost,.gh-sidebar .btn-ghost-active{white-space:normal;line-height:1.25}.gh-sidebar-card{flex:0 0 auto}

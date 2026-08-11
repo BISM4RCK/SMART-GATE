@@ -87,7 +87,7 @@ void loop(){
   String body="session_id="+urlEncode(activeSession)+"&rfid_uid="+urlEncode(uid);
   if(!apiPost("/api/esp32/submit_rfid_scan.php",body,response,status)){Serial.printf("ERROR! Server response HTTP %d\n",status);if(isBurn)clearProfile();activeSession="";haltCard();return;}
   bool ok=response.indexOf("\"ok\":true")>=0;
-  if(isBurn && ok){Serial.println("RFID BURNED SUCCESSFULLY: "+burnCode);}
+  if(isBurn && ok){Serial.println("CARD BURNED SUCCESSFULLY: "+burnCode);Serial.println("Card updated. You can return to the RFID Management page.");}
   else if(ok && response.indexOf("\"gate_opened\":true")>=0){Serial.println("GATE OPENED");openGate();}
   else Serial.println("ERROR! RFID was not accepted.");
   haltCard(); activeSession="";

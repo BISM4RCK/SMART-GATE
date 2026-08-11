@@ -8,7 +8,7 @@ $targets=[
 ?>
 <div class="container-fluid">
 <div class="gh-card p-4">
-<h2 class="mb-1">Interface Customization</h2><p class="text-muted">Choose one specific button or the dashboard background, then set its color and size.</p>
+<h2 class="mb-1">Interface Customization</h2><p class="text-muted">Adjust the dashboard interface and shortcut appearance.</p>
 <form method="post" class="row g-3">
 <?= csrf_field() ?>
 <div class="col-md-4"><label>Target</label><select class="form-select" name="setting_key" required><?php foreach($targets as $k=>$label): ?><option value="<?=e($k)?>"><?=e($label)?></option><?php endforeach;?></select></div>

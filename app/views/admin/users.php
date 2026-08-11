@@ -6,7 +6,7 @@ include app_path('views/layouts/header.php');
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
         <div>
             <h2 class="mb-1">Account Management</h2>
-            <div class="text-muted">Manage resident and staff accounts separately, including administrator-controlled password resets and username changes.</div>
+            <div class="text-muted">Manage resident and staff accounts, credentials, and access.</div>
         </div>
     </div>
 

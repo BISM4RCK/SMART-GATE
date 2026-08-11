@@ -5,22 +5,14 @@ $roleLabel=function($role){return $role==='resident'?'Resident':ucfirst($role);}
 ?>
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-        <div><h2 class="mb-1">RFID Management</h2><div class="text-muted">Assign an RFID UID to a resident or staff profile, review active credentials, and void credentials when a card is retired.</div></div>
-    </div>
-
-    <div class="alert alert-secondary shadow-sm">
-        <strong>ESP32 + RC522:</strong> The project ZIP includes <code>esp32/SmartGate_RFID_RC522/SmartGate_RFID_RC522.ino</code>. Set Wi-Fi, the Smart Gate base URL, and the device key, then open it in Arduino IDE. In Serial Monitor use <code>BURN &lt;account_id&gt;</code> to scan and assign a card, or <code>VOID</code> to scan and retire the card. The card's factory UID is not rewritten; the sketch clears a writable data block and Smart Gate voids the server credential.
-    </div>
-
-    <div class="alert alert-info shadow-sm">
-        <strong>Hardware note:</strong> this page manages the RFID credential in Smart Gate and records the programming/voiding action. Physical card writing or UID rewriting still requires compatible RFID writer hardware; many RFID cards have manufacturer-locked UIDs.
+        <div><h2 class="mb-1">RFID Management</h2><div class="text-muted">Program, review, and void RFID credentials for resident and staff accounts.</div></div>
     </div>
 
     <div class="row g-3 mb-4">
         <div class="col-xl-5">
             <div class="gh-card p-4 h-100">
                 <h5 class="mb-1"><i class="bi bi-credit-card-2-front me-2"></i>Burn / Program RFID Profile</h5>
-                <div class="small text-muted mb-3">Select the account profile that this scanned UID should validate against.</div>
+                <div class="small text-muted mb-3">Choose an account, then present its card to the ESP32 + RC522 reader.</div>
                 <form method="post" id="rfidBurnForm" class="d-grid gap-3">
                     <?=csrf_field()?>
                     <input type="hidden" name="action" value="assign">
@@ -34,36 +26,47 @@ $roleLabel=function($role){return $role==='resident'?'Resident':ucfirst($role);}
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="alert alert-info mb-0">
-                        <strong>Generated Smart Gate RFID ID:</strong> <code id="generatedRfidCode">Select an account</code>
-                        <div class="small mt-1">Residents use <code>res00Block-Lot-Letter</code>; admins use <code>adm00AccountNumber</code>; guards use <code>grd00AccountNumber</code>.</div>
+                    <div class="gh-card-soft p-3">
+                        <strong>Generated Smart Gate RFID ID</strong><br><code id="generatedRfidCode">Select an account</code>
+                        <div class="small text-muted mt-1">Residents: <code>res00Block-Lot-Letter</code> · Admins: <code>adm00AccountNumber</code> · Guards: <code>grd00AccountNumber</code>.</div>
                     </div>
-                    <div class="alert alert-secondary mb-0">The physical RC522 UID is captured automatically by the ESP32. It is not entered here.</div>
+                    <div class="small text-muted">The physical RC522 UID is captured automatically by the ESP32.</div>
                     <div>
                         <label class="form-label" for="rfidNotes">Notes <span class="text-muted">(optional)</span></label>
                         <textarea class="form-control" id="rfidNotes" name="notes" rows="2" placeholder="Card issue, replacement, reason, etc."></textarea>
                     </div>
                     <button class="btn gh-primary btn-lg" id="startRfidBurn" type="submit"><i class="bi bi-broadcast me-2"></i>START RFID BURN</button>
+                    <div id="rfidBurnStatus" class="d-none" aria-live="polite"></div>
                 </form>
             </div>
         </div>
         <div class="col-xl-7">
             <div class="gh-card p-4 h-100">
-                <h5 class="mb-1">Credential rules</h5>
-                <ul class="small text-muted mb-0 mt-3">
-                    <li>Active RFID profiles are valid for the selected account.</li>
-                    <li>Voiding removes the UID from the active credential and prevents gate validation.</li>
-                    <li>Every program and void operation is recorded in Admin / Guard Logs.</li>
-                    <li>Resident and staff accounts can both receive RFID profiles.</li>
-                    <li>Void credentials remain in the history so administrators can audit retired cards.</li>
+                <h5 class="mb-1">Credential Rules</h5>
+                <ul class="small text-muted mb-4 mt-3">
+                    <li>Each account has one active RFID profile.</li>
+                    <li>Replacing a card retires the previous active credential.</li>
+                    <li>Void credentials cannot open the gate.</li>
+                    <li>Program and void actions are recorded in Admin / Guard Logs.</li>
                 </ul>
+                <div class="border-top pt-4">
+                    <h5 class="mb-2">How to burn a card</h5>
+                    <ol class="mb-0 ps-3">
+                        <li class="mb-2">Select the resident or staff account.</li>
+                        <li class="mb-2">Confirm the generated Smart Gate RFID ID.</li>
+                        <li class="mb-2">Click <strong>START RFID BURN</strong>.</li>
+                        <li class="mb-2">Wait for the ESP32 + RC522 to request a card.</li>
+                        <li class="mb-2">Place the RFID card on the RC522 reader.</li>
+                        <li>Wait for <strong>Card updated</strong>, then return to RFID Management.</li>
+                    </ol>
+                </div>
             </div>
         </div>
     </div>
 
     <div class="gh-card p-4">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-            <div><h5 class="mb-1">RFID Credentials</h5><div class="small text-muted">Filter by profile type, status, or account/UID.</div></div>
+            <div><h5 class="mb-1">RFID Credentials</h5><div class="small text-muted">Review active and retired RFID profiles.</div></div>
         </div>
         <form class="row g-2 mb-3" method="get">
             <div class="col-md-3"><select class="form-select" name="account_type"><option value="">All profiles</option><option value="resident" <?=$filters['account_type']==='resident'?'selected':''?>>Residents</option><option value="staff" <?=$filters['account_type']==='staff'?'selected':''?>>Staff</option></select></div>
@@ -105,20 +108,29 @@ $roleLabel=function($role){return $role==='resident'?'Resident':ucfirst($role);}
 </div>
 <script>
 (()=>{
-  const select=document.getElementById('rfidAccount'),code=document.getElementById('generatedRfidCode'),form=document.getElementById('rfidBurnForm'),button=document.getElementById('startRfidBurn');
-  if(!select||!code||!form||!button)return;
+  const select=document.getElementById('rfidAccount'),code=document.getElementById('generatedRfidCode'),form=document.getElementById('rfidBurnForm'),button=document.getElementById('startRfidBurn'),statusBox=document.getElementById('rfidBurnStatus');
+  if(!select||!code||!form||!button||!statusBox)return;
   const codes={};
   <?php foreach($accounts as $account): $house=''; if(($account['role']??'')==='resident'){ $house=preg_replace('/\s+/','', (string)($account['house_number']??'')); } $prefix=($account['role']??'')==='resident'?'res00'.$house:(($account['role']??'')==='admin'?'adm00'.(int)$account['id']:'grd00'.(int)$account['id']); ?>codes['<?=e($account['id'])?>']='<?=e($prefix)?>';<?php endforeach; ?>
-  const update=()=>{code.textContent=codes[select.value]||'Select an account';}; select.addEventListener('change',update); update();
+  const update=()=>{code.textContent=codes[select.value]||'Select an account';};
+  const showStatus=(kind,title,message,withBack=false)=>{statusBox.className='mt-2 p-3 rounded-4 '+(kind==='success'?'bg-success-subtle text-success-emphasis':kind==='danger'?'bg-danger-subtle text-danger-emphasis':'bg-light');statusBox.innerHTML='<strong>'+title+'</strong><div class="small mt-1">'+message+'</div>'+(withBack?'<a class="btn btn-sm btn-outline-success mt-3" href="<?=e(url('admin/rfid.php'))?>">Back to RFID Management</a>':'');};
+  select.addEventListener('change',update); update();
   form.addEventListener('submit',async(e)=>{
-    e.preventDefault(); if(!select.value){alert('Select an account first.');return;}
-    button.disabled=true; button.textContent='WAITING FOR RFID...';
-    const status=document.createElement('div'); status.className='alert alert-info mt-2'; status.textContent='Waiting for the ESP32 + RC522. Present the card when the reader is ready.'; form.appendChild(status);
+    e.preventDefault();
+    if(!select.value){showStatus('danger','Select an account.','Choose a resident or staff account before starting.');return;}
+    button.disabled=true; button.textContent='WAITING FOR RFID...'; showStatus('info','Waiting for card.','The ESP32 + RC522 is waiting for the physical RFID card.');
     try{
-      const res=await fetch('<?=e(url('admin/rfid.php'))?>',{method:'POST',body:new FormData(form),headers:{'Accept':'application/json'},cache:'no-store'}); const data=await res.json();
-      if(!data.ok)throw new Error(data.message||'Could not start RFID burn.');
-      const poll=async()=>{const r=await fetch('<?=e(url('admin/rfid-result.php'))?>?session_id='+encodeURIComponent(data.session_id),{headers:{'Accept':'application/json'},cache:'no-store'});const d=await r.json();if(!d.ok)throw new Error(d.message||'Unable to check RFID burn.');if(d.status==='waiting'){status.textContent='Waiting for RFID card from ESP32...';setTimeout(poll,1000);return;} if(d.status==='approved'){status.className='alert alert-success mt-2';status.textContent='RFID BURNED: '+(d.result?.credential_code||data.credential_code)+' — '+(d.result?.account||'account');setTimeout(()=>location.reload(),900);}else{throw new Error(d.result?.notes||d.message||'RFID burn failed.');}}; await poll();
-    }catch(err){status.className='alert alert-danger mt-2';status.textContent='ERROR! '+err.message;button.disabled=false;button.innerHTML='<i class="bi bi-broadcast me-2"></i>START RFID BURN';}
+      const res=await fetch('<?=e(url('admin/rfid.php'))?>',{method:'POST',body:new FormData(form),headers:{'Accept':'application/json'},cache:'no-store'});
+      const data=await res.json(); if(!data.ok)throw new Error(data.message||'Could not start RFID burn.');
+      const poll=async()=>{
+        const r=await fetch('<?=e(url('admin/rfid-result.php'))?>?session_id='+encodeURIComponent(data.session_id),{headers:{'Accept':'application/json'},cache:'no-store'});
+        const d=await r.json(); if(!d.ok)throw new Error(d.message||'Unable to check RFID burn.');
+        if(d.status==='waiting'){showStatus('info','Waiting for card.','Present the RFID card on the RC522 reader.');setTimeout(poll,1000);return;}
+        if(d.status==='approved'){button.disabled=false;button.innerHTML='<i class="bi bi-check-circle me-2"></i>CARD UPDATED';showStatus('success','Card updated successfully.','RFID '+(d.result?.credential_code||data.credential_code)+' is now assigned to '+(d.result?.account||'the selected account')+'. The ESP32 confirmed the card write.',true);return;}
+        throw new Error(d.result?.notes||d.message||'RFID burn failed.');
+      };
+      await poll();
+    }catch(err){button.disabled=false;button.innerHTML='<i class="bi bi-broadcast me-2"></i>START RFID BURN';showStatus('danger','Card update failed.',err.message||'The RFID card could not be updated.');}
   });
 })();
 </script>

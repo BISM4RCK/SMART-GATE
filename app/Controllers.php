@@ -534,7 +534,7 @@ class Esp32Controller
                 $credential=RfidCardModel::profileCodeForUser($target);
                 $id=RfidCardModel::assign((int)$target['id'],$uid,null,'ESP32 RC522 RFID burn', $credential);
                 AccountActivityLogModel::record((int)$session['actor_user_id'],$session['actor_role'],null,'rfid_programmed','RFID '.$uid.' assigned to '.$target['email'].' as '.$credential.' (profile #'.$id.')');
-                $result=['gate_opened'=>false,'rfid_uid'=>$uid,'rfid_card_id'=>$id,'credential_code'=>$credential,'account'=>$target['full_name'],'role'=>$target['role'],'notes'=>'RFID burn authorized.'];
+                $result=['gate_opened'=>false,'rfid_uid'=>$uid,'rfid_card_id'=>$id,'credential_code'=>$credential,'account'=>$target['full_name'],'role'=>$target['role'],'notes'=>'Card updated successfully. RFID profile programmed and assigned.'];
                 RfidScanSessionModel::finish($sessionId,'approved',$result);
                 json_response(['ok'=>true,'burn'=>true,'write_profile'=>true,'credential_code'=>$credential,'result'=>$result]);
             }catch(Throwable $e){RfidScanSessionModel::finish($sessionId,'error',['notes'=>$e->getMessage()]);json_response(['ok'=>false,'message'=>$e->getMessage()],409);}

@@ -6,7 +6,7 @@ include app_path('views/layouts/header.php');
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
         <div>
             <h2 class="mb-1">Admin Dashboard</h2>
-            <div class="text-muted">Administrative controls first. Guard-compatible tools remain available where appropriate; Gate Scan is guard-only.</div>
+            <div class="text-muted">Manage the gate, accounts, vehicles, RFID, blacklist, logs, and staff tools.</div>
         </div>
     </div>
 
@@ -14,7 +14,7 @@ include app_path('views/layouts/header.php');
         <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
             <div>
                 <h4 id="gate-control-heading" class="mb-1"><i class="bi bi-unlock me-2"></i>Gate Control</h4>
-                <div class="text-muted">Manual override for authorized gate opening. Enter a plate number or select Emergency.</div>
+                <div class="text-muted">Open the gate manually for an authorized vehicle or emergency.</div>
             </div>
             <span class="badge text-bg-danger rounded-pill px-3 py-2">ADMIN OVERRIDE</span>
         </div>
@@ -96,7 +96,7 @@ include app_path('views/layouts/header.php');
             <div class="gh-card p-4 h-100">
                 <div class="fs-3 mb-2"><i class="bi bi-qr-code-scan"></i></div>
                 <h5 class="mb-1">Gate Scan</h5>
-                <div class="small text-muted">Guard-only by design. Admin Gate Scan was intentionally removed per the latest requirement.</div>
+                <div class="small text-muted">Gate scanning is handled from the guard workflow.</div>
             </div>
         </div>
     </section>
