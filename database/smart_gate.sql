@@ -103,6 +103,7 @@ CREATE TABLE rfid_tags (
 CREATE TABLE rfid_cards (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT UNSIGNED NOT NULL,
+    vehicle_id BIGINT UNSIGNED NULL,
     uid VARCHAR(100) NULL UNIQUE,
     credential_code VARCHAR(100) NULL,
     status ENUM('active','void') NOT NULL DEFAULT 'active',
@@ -114,9 +115,11 @@ CREATE TABLE rfid_cards (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     KEY idx_rfid_cards_user (user_id),
+    KEY idx_rfid_cards_vehicle (vehicle_id),
     KEY idx_rfid_cards_status (status),
     KEY idx_rfid_cards_credential_code (credential_code),
     CONSTRAINT fk_rfid_cards_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_rfid_cards_vehicle FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE SET NULL,
     CONSTRAINT fk_rfid_cards_issued_by FOREIGN KEY (issued_by) REFERENCES users(id) ON DELETE SET NULL,
     CONSTRAINT fk_rfid_cards_voided_by FOREIGN KEY (voided_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -129,6 +132,7 @@ CREATE TABLE rfid_scan_sessions (
     actor_role ENUM('guard','admin') NOT NULL,
     purpose ENUM('gate','burn') NOT NULL DEFAULT 'gate',
     target_user_id BIGINT UNSIGNED NULL,
+    target_vehicle_id BIGINT UNSIGNED NULL,
     notes VARCHAR(255) NULL,
     status ENUM('waiting','submitted','approved','error','expired') NOT NULL DEFAULT 'waiting',
     rfid_uid VARCHAR(100) NULL,
@@ -138,7 +142,9 @@ CREATE TABLE rfid_scan_sessions (
     expires_at DATETIME NOT NULL,
     KEY idx_rfid_scan_device_status(device_id,status,expires_at),
     KEY idx_rfid_scan_target(target_user_id),
+    KEY idx_rfid_scan_vehicle(target_vehicle_id),
     CONSTRAINT fk_rfid_scan_target FOREIGN KEY(target_user_id) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_rfid_scan_vehicle FOREIGN KEY(target_vehicle_id) REFERENCES vehicles(id) ON DELETE SET NULL,
     CONSTRAINT fk_rfid_scan_actor FOREIGN KEY(actor_user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -425,3 +431,7 @@ INSERT INTO visitor_credentials (visitor_request_id, visitor_id, qr_token_hash, 
 ((SELECT id FROM visitor_requests WHERE qr_reference='GH-REQ-0002' LIMIT 1), 'DEMO02', SHA2('GHQR-DEMO02',256), SHA2('GHBC-DEMO02',256), 'GHQR-DEMO02', 'GHBC-DEMO02');
 
 -- BISM4RCK-KUN3H0 2026
+
+-- RFID resident vehicle association.
+ALTER TABLE rfid_cards ADD COLUMN IF NOT EXISTS vehicle_id BIGINT UNSIGNED NULL;
+ALTER TABLE rfid_scan_sessions ADD COLUMN IF NOT EXISTS target_vehicle_id BIGINT UNSIGNED NULL;

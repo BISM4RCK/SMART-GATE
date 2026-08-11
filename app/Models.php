@@ -55,7 +55,16 @@ class WalkInVisitorModel
 class UserVehicleModel
 {
     public static function allStaff(array $filters=[]): array { $where=[];$params=[]; if(($filters['vehicle_type']??'')!==''){ $where[]='uv.vehicle_type=?';$params[]=$filters['vehicle_type']; } if(($filters['owner_id']??'')!==''){ $where[]='uv.user_id=?';$params[]=(int)$filters['owner_id']; } $sql="SELECT uv.*,u.full_name,u.email,u.role FROM user_vehicles uv JOIN users u ON u.id=uv.user_id"; if($where)$sql.=' WHERE '.implode(' AND ',$where); $sql.=' ORDER BY u.role,u.full_name,uv.created_at DESC'; $st=Database::pdo()->prepare($sql);$st->execute($params);return $st->fetchAll(); }
-    public static function create(int $userId,string $plate,string $type,string $color=''): int { $s=Database::pdo()->prepare('INSERT INTO user_vehicles(user_id,plate_number,vehicle_type,color) VALUES(?,?,?,?)');$s->execute([$userId,strtoupper(trim($plate)),strtolower(trim($type)),$color?:'N/A']);return (int)Database::pdo()->lastInsertId(); }
+    public static function create(int $userId,string $plate,string $type,string $color=''): int {
+        $color=self::titleCaseColor($color);
+        $s=Database::pdo()->prepare('INSERT INTO user_vehicles(user_id,plate_number,vehicle_type,color) VALUES(?,?,?,?)');
+        $s->execute([$userId,strtoupper(trim($plate)),strtolower(trim($type)),$color?:'N/A']);
+        return (int)Database::pdo()->lastInsertId();
+    }
+    private static function titleCaseColor(string $color): string {
+        $color=trim(preg_replace('/\\s+/',' ',$color));
+        return $color===''?'N/A':mb_convert_case($color, MB_CASE_TITLE, 'UTF-8');
+    }
     public static function delete(int $id): bool { $s=Database::pdo()->prepare('DELETE FROM user_vehicles WHERE id=?');$s->execute([$id]);return $s->rowCount()>0; }
     public static function findByPlate(string $plate): ?array { $s=Database::pdo()->prepare("SELECT uv.*,u.full_name,u.email,u.role FROM user_vehicles uv JOIN users u ON u.id=uv.user_id WHERE uv.plate_number=? AND u.status='active' LIMIT 1");$s->execute([strtoupper(trim($plate))]);return $s->fetch()?:null; }
 }
@@ -130,7 +139,7 @@ class UserModel
     }
     public static function all(): array
     {
-        return Database::pdo()->query("SELECT u.*,r.house_number,r.block_number,r.lot_number,r.household_letter FROM users u LEFT JOIN residents r ON r.user_id=u.id ORDER BY u.full_name ASC")->fetchAll();
+        return Database::pdo()->query("SELECT u.*,r.id AS resident_id,r.house_number,r.block_number,r.lot_number,r.household_letter FROM users u LEFT JOIN residents r ON r.user_id=u.id ORDER BY u.full_name ASC")->fetchAll();
     }
     public static function touchLogin(int $id): void
     {
@@ -218,8 +227,10 @@ class VehicleModel
     }
     public static function create(int $residentId, string $plate, string $type, string $color = ''): int
     {
+        $color=trim(preg_replace('/\\s+/',' ',$color));
+        $color=$color===''?'N/A':mb_convert_case($color, MB_CASE_TITLE, 'UTF-8');
         $stmt = Database::pdo()->prepare("INSERT INTO vehicles (resident_id, plate_number, vehicle_type, color, status) VALUES (?, ?, ?, ?, 'active')");
-        $stmt->execute([$residentId, $plate, strtolower($type), $color ?: 'N/A']);
+        $stmt->execute([$residentId, $plate, strtolower($type), $color]);
         return (int)Database::pdo()->lastInsertId();
     }
     public static function findByPlate(string $plate): ?array
@@ -248,8 +259,10 @@ class VehicleModel
 
     public static function update(int $id, string $plate, string $type, string $color = '', string $brand = '', string $model = ''): bool
     {
+        $color=trim(preg_replace('/\\s+/',' ',$color));
+        $color=$color===''?'N/A':mb_convert_case($color, MB_CASE_TITLE, 'UTF-8');
         $stmt = Database::pdo()->prepare("UPDATE vehicles SET plate_number = ?, vehicle_type = ?, color = ?, brand = ?, model = ? WHERE id = ?");
-        return $stmt->execute([$plate, strtolower($type), $color ?: 'N/A', $brand ?: null, $model ?: null, $id]);
+        return $stmt->execute([$plate, strtolower($type), $color, $brand ?: null, $model ?: null, $id]);
     }
 
     public static function findByRfid(string $rfid): ?array
@@ -280,7 +293,7 @@ class RfidCardModel
         elseif($accountType==='staff') { $where[]="u.role IN ('guard','admin')"; }
         if(in_array($status,['active','void'],true)) { $where[]='rc.status=?'; $params[]=$status; }
         if($search!=='') { $where[]='(u.full_name LIKE ? OR u.email LIKE ? OR rc.uid LIKE ? OR rc.credential_code LIKE ? OR rc.notes LIKE ?)'; $term='%'.$search.'%'; array_push($params,$term,$term,$term,$term,$term); }
-        $sql="SELECT rc.*,u.full_name,u.email,u.role,ub.full_name AS issued_by_name,vb.full_name AS voided_by_name,r.house_number,r.block_number,r.lot_number,r.household_letter FROM rfid_cards rc JOIN users u ON u.id=rc.user_id LEFT JOIN residents r ON r.user_id=u.id LEFT JOIN users ub ON ub.id=rc.issued_by LEFT JOIN users vb ON vb.id=rc.voided_by";
+        $sql="SELECT rc.*,u.full_name,u.email,u.role,ub.full_name AS issued_by_name,vb.full_name AS voided_by_name,r.house_number,r.block_number,r.lot_number,r.household_letter,v.plate_number AS vehicle_plate,v.vehicle_type,v.color AS vehicle_color FROM rfid_cards rc JOIN users u ON u.id=rc.user_id LEFT JOIN residents r ON r.user_id=u.id LEFT JOIN vehicles v ON v.id=rc.vehicle_id LEFT JOIN users ub ON ub.id=rc.issued_by LEFT JOIN users vb ON vb.id=rc.voided_by";
         if($where) $sql.=' WHERE '.implode(' AND ',$where);
         $sql.=' ORDER BY rc.created_at DESC';
         $st=Database::pdo()->prepare($sql); $st->execute($params); return $st->fetchAll();
@@ -294,13 +307,13 @@ class RfidCardModel
 
     public static function findByUid(string $uid): ?array
     {
-        $s=Database::pdo()->prepare("SELECT rc.*,u.full_name,u.email,u.role FROM rfid_cards rc JOIN users u ON u.id=rc.user_id WHERE rc.uid=? AND rc.status='active' AND u.status='active' LIMIT 1");
+        $s=Database::pdo()->prepare("SELECT rc.*,u.full_name,u.email,u.role,v.id AS vehicle_id,v.plate_number,v.vehicle_type,v.color FROM rfid_cards rc JOIN users u ON u.id=rc.user_id LEFT JOIN vehicles v ON v.id=rc.vehicle_id WHERE rc.uid=? AND rc.status='active' AND u.status='active' LIMIT 1");
         $s->execute([trim($uid)]); return $s->fetch() ?: null;
     }
 
     public static function findActiveByUid(string $uid): ?array { return self::findByUid($uid); }
 
-    public static function profileCodeForUser(array $user): string
+    public static function profileCodeForUser(array $user, ?array $vehicle=null): string
     {
         $role=strtolower((string)($user['role']??''));
         if($role==='resident'){
@@ -311,13 +324,14 @@ class RfidCardModel
             }
             $house=preg_replace('/\s+/', '', $house);
             $house=str_replace('--','-', $house);
-            return 'res00'.$house;
+            $plate=preg_replace('/[^A-Za-z0-9]+/', '', strtoupper((string)($vehicle['plate_number']??'')));
+            return 'res00'.$house.($plate!==''?'-'.$plate:'');
         }
         $prefix=$role==='admin'?'adm':'grd';
         return $prefix.'00'.(int)$user['id'];
     }
 
-    public static function assign(int $userId,string $uid,?int $issuedBy,string $notes='', ?string $credentialCode=null): int
+    public static function assign(int $userId,string $uid,?int $issuedBy,string $notes='', ?string $credentialCode=null, ?int $vehicleId=null): int
     {
         $uid=strtoupper(trim($uid));
         if($uid==='') throw new RuntimeException('RFID UID is required.');
@@ -327,6 +341,11 @@ class RfidCardModel
         if(!$user) throw new RuntimeException('RFID account not found.');
         if($credentialCode===null || trim($credentialCode)==='') $credentialCode=self::profileCodeForUser($user);
         $credentialCode=trim($credentialCode);
+        if(($user['role']??'')==='resident'){
+            if(!$vehicleId) throw new RuntimeException('A resident RFID credential must be linked to a resident vehicle.');
+            $resident=ResidentModel::findByUserId($userId); $vehicle=$resident?VehicleModel::find($vehicleId):null;
+            if(!$resident || !$vehicle || (int)$vehicle['resident_id']!==(int)$resident['id'] || ($vehicle['status']??'active')!=='active') throw new RuntimeException('The selected RFID vehicle does not belong to this resident.');
+        } else { $vehicleId=null; }
         $old=Database::pdo()->prepare("UPDATE rfid_cards SET uid=NULL,status='void',voided_by=?,voided_at=NOW(),notes=CASE WHEN notes IS NULL OR notes='' THEN 'Replaced by a new RFID credential' ELSE CONCAT(notes,' | Replaced by a new RFID credential') END WHERE user_id=? AND status='active'"); $old->execute([$issuedBy,$userId]);
         $s=Database::pdo()->prepare("INSERT INTO rfid_cards (user_id,uid,credential_code,status,issued_by,issued_at,notes) VALUES (?,?,?,'active',?,NOW(),?)");
         $s->execute([$userId,$uid,$credentialCode,$issuedBy,trim($notes)?:null]); return (int)Database::pdo()->lastInsertId();
@@ -341,11 +360,11 @@ class RfidCardModel
 
 class RfidScanSessionModel
 {
-    public static function create(string $deviceId, int $actorUserId, string $actorRole, string $purpose='gate', ?int $targetUserId=null, string $notes=''): string
+    public static function create(string $deviceId, int $actorUserId, string $actorRole, string $purpose='gate', ?int $targetUserId=null, string $notes='', ?int $targetVehicleId=null): string
     {
         $id=bin2hex(random_bytes(16));
-        $s=Database::pdo()->prepare("INSERT INTO rfid_scan_sessions (id,device_id,actor_user_id,actor_role,purpose,target_user_id,notes,status,created_at,expires_at) VALUES (?,?,?,?,?,?,?,'waiting',NOW(),DATE_ADD(NOW(),INTERVAL 60 SECOND))");
-        $s->execute([$id,$deviceId,$actorUserId,$actorRole,$purpose,$targetUserId,trim($notes)?:null]); return $id;
+        $s=Database::pdo()->prepare("INSERT INTO rfid_scan_sessions (id,device_id,actor_user_id,actor_role,purpose,target_user_id,target_vehicle_id,notes,status,created_at,expires_at) VALUES (?,?,?,?,?,?,?,?,'waiting',NOW(),DATE_ADD(NOW(),INTERVAL 60 SECOND))");
+        $s->execute([$id,$deviceId,$actorUserId,$actorRole,$purpose,$targetUserId,$targetVehicleId,trim($notes)?:null]); return $id;
     }
     public static function waitingForDevice(string $deviceId): ?array
     {
@@ -611,7 +630,11 @@ class GateLogModel
         elseif($rfidProfile){
             $gateStatus='approved';
             $notes='Matched RFID profile for '.($rfidProfile['full_name']??$rfidProfile['email']??'account').' ('.strtoupper($rfidProfile['role']).')';
-            if(($rfidProfile['role']??'')==='resident'){ $rr=ResidentModel::findByUserId((int)$rfidProfile['user_id']); $residentId=$rr?(int)$rr['id']:null; }
+            if(!empty($rfidProfile['vehicle_id'])){
+                $matched=VehicleModel::find((int)$rfidProfile['vehicle_id']);
+                if($matched){ $plate=$matched['plate_number']??$plate; $vehicleId=(int)$matched['id']; $residentId=(int)$matched['resident_id']; $notes.=' / vehicle '.$plate; }
+            }
+            if(($rfidProfile['role']??'')==='resident' && !$residentId){ $rr=ResidentModel::findByUserId((int)$rfidProfile['user_id']); $residentId=$rr?(int)$rr['id']:null; }
         }
         else {$blacklisted=$plate?BlacklistModel::isActivePlate($plate):false;$gateStatus=$blacklisted?'denied':($matched?'approved':'denied');$notes=$blacklisted?'Plate is on the active blacklist':($matched?'Matched '.($rfid?'RFID':'vehicle'):'No matching RFID/QR credential found');}
         if($manual){$gateStatus='manual_override';$notes='Manual gate override by authorized account';}

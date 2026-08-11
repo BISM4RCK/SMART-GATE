@@ -12,7 +12,7 @@ $roleLabel=function($role){return $role==='resident'?'Resident':ucfirst($role);}
         <div class="col-xl-5">
             <div class="gh-card p-4 h-100">
                 <h5 class="mb-1"><i class="bi bi-credit-card-2-front me-2"></i>Burn / Program RFID Profile</h5>
-                <div class="small text-muted mb-3">Choose an account, then present its card to the ESP32 + RC522 reader.</div>
+                <div class="small text-muted mb-3">Choose an account, then present its card to the reader.</div>
                 <form method="post" id="rfidBurnForm" class="d-grid gap-3">
                     <?=csrf_field()?>
                     <input type="hidden" name="action" value="assign">
@@ -26,11 +26,18 @@ $roleLabel=function($role){return $role==='resident'?'Resident':ucfirst($role);}
                             <?php endforeach; ?>
                         </select>
                     </div>
+                    <div id="residentVehicleWrap" class="d-none">
+                        <label class="form-label" for="rfidVehicle">Resident Vehicle <span class="text-danger">*</span></label>
+                        <select class="form-select" id="rfidVehicle" name="vehicle_id">
+                            <option value="">Select the vehicle for this RFID card...</option>
+                        </select>
+                        <div class="small text-muted mt-1">Select the resident vehicle that this RFID card will authorize.</div>
+                    </div>
                     <div class="gh-card-soft p-3">
                         <strong>Generated Smart Gate RFID ID</strong><br><code id="generatedRfidCode">Select an account</code>
-                        <div class="small text-muted mt-1">Residents: <code>res00Block-Lot-Letter</code> · Admins: <code>adm00AccountNumber</code> · Guards: <code>grd00AccountNumber</code>.</div>
+                        <div class="small text-muted mt-1">Residents: <code>res00Block-Lot-Letter-PLATE</code> · Admins: <code>adm00AccountNumber</code> · Guards: <code>grd00AccountNumber</code>.</div>
                     </div>
-                    <div class="small text-muted">The physical RC522 UID is captured automatically by the ESP32.</div>
+                    <div class="small text-muted"></div>
                     <div>
                         <label class="form-label" for="rfidNotes">Notes <span class="text-muted">(optional)</span></label>
                         <textarea class="form-control" id="rfidNotes" name="notes" rows="2" placeholder="Card issue, replacement, reason, etc."></textarea>
@@ -76,7 +83,7 @@ $roleLabel=function($role){return $role==='resident'?'Resident':ucfirst($role);}
         </form>
         <div class="table-responsive">
             <table class="table gh-table align-middle">
-                <thead><tr><th>Account</th><th>Type</th><th>Smart Gate ID</th><th>RFID UID</th><th>Status</th><th>Issued</th><th>Voided</th><th>Action</th></tr></thead>
+                <thead><tr><th>Account</th><th>Type</th><th>Smart Gate ID</th><th>RFID UID</th><th>Vehicle</th><th>Status</th><th>Issued</th><th>Voided</th><th>Action</th></tr></thead>
                 <tbody>
                 <?php foreach($cards as $card): ?>
                     <tr>
@@ -84,6 +91,7 @@ $roleLabel=function($role){return $role==='resident'?'Resident':ucfirst($role);}
                         <td><span class="badge text-bg-<?=$card['role']==='resident'?'primary':'dark'?>"><?=e($roleLabel($card['role']))?></span></td>
                         <td><code><?=e($card['credential_code'] ?? '—')?></code></td>
                         <td><code><?=e($card['uid'] ?? 'NULL / VOID')?></code></td>
+                        <td><?=e($card['vehicle_plate'] ?? '—')?></td>
                         <td><span class="badge rounded-pill <?=$card['status']==='active'?'text-bg-success':'text-bg-secondary'?>"><?=e(strtoupper($card['status']))?></span></td>
                         <td><div><?=e($card['issued_at'] ?? '—')?></div><div class="small text-muted"><?=e($card['issued_by_name'] ?? '—')?></div></td>
                         <td><div><?=e($card['voided_at'] ?? '—')?></div><div class="small text-muted"><?=e($card['voided_by_name'] ?? '—')?></div></td>
@@ -100,7 +108,7 @@ $roleLabel=function($role){return $role==='resident'?'Resident':ucfirst($role);}
                         </td>
                     </tr>
                 <?php endforeach; ?>
-                <?php if(empty($cards)): ?><tr><td colspan="8" class="text-center text-muted py-4">No RFID profiles match the selected filters.</td></tr><?php endif; ?>
+                <?php if(empty($cards)): ?><tr><td colspan="9" class="text-center text-muted py-4">No RFID profiles match the selected filters.</td></tr><?php endif; ?>
                 </tbody>
             </table>
         </div>
@@ -108,16 +116,59 @@ $roleLabel=function($role){return $role==='resident'?'Resident':ucfirst($role);}
 </div>
 <script>
 (()=>{
-  const select=document.getElementById('rfidAccount'),code=document.getElementById('generatedRfidCode'),form=document.getElementById('rfidBurnForm'),button=document.getElementById('startRfidBurn'),statusBox=document.getElementById('rfidBurnStatus');
+  const select=document.getElementById('rfidAccount'),vehicleSelect=document.getElementById('rfidVehicle'),vehicleWrap=document.getElementById('residentVehicleWrap'),code=document.getElementById('generatedRfidCode'),form=document.getElementById('rfidBurnForm'),button=document.getElementById('startRfidBurn'),statusBox=document.getElementById('rfidBurnStatus');
   if(!select||!code||!form||!button||!statusBox)return;
-  const codes={};
-  <?php foreach($accounts as $account): $house=''; if(($account['role']??'')==='resident'){ $house=preg_replace('/\s+/','', (string)($account['house_number']??'')); } $prefix=($account['role']??'')==='resident'?'res00'.$house:(($account['role']??'')==='admin'?'adm00'.(int)$account['id']:'grd00'.(int)$account['id']); ?>codes['<?=e($account['id'])?>']='<?=e($prefix)?>';<?php endforeach; ?>
-  const update=()=>{code.textContent=codes[select.value]||'Select an account';};
+  const codes={},roles={};
+  <?php foreach($accounts as $account): $house=''; if(($account['role']??'')==='resident'){ $house=preg_replace('/\s+/','', (string)($account['house_number']??'')); } $prefix=($account['role']??'')==='resident'?'res00'.$house:(($account['role']??'')==='admin'?'adm00'.(int)$account['id']:'grd00'.(int)$account['id']); ?>codes['<?=e($account['id'])?>']='<?=e($prefix)?>';roles['<?=e($account['id'])?>']='<?=e($account['role'])?>';<?php endforeach; ?>
+  const updateCode=()=>{
+    const resident=roles[select.value]==='resident';
+    const baseCode=codes[select.value]||'Select an account';
+    const selected=vehicleSelect.options[vehicleSelect.selectedIndex];
+    const plate=(selected?.dataset?.plate||'').replace(/[^A-Za-z0-9]/g,'').toUpperCase();
+    code.textContent=resident&&plate?baseCode+'-'+plate:baseCode;
+  };
+  const loadVehicles=async()=>{
+    const resident=roles[select.value]==='resident';
+    vehicleWrap.classList.toggle('d-none',!resident);
+    vehicleSelect.required=resident;
+    vehicleSelect.disabled=!resident;
+    vehicleSelect.innerHTML='<option value="">Select the vehicle for this RFID card...</option>';
+    if(!resident){updateCode();return;}
+    vehicleSelect.disabled=true;
+    vehicleSelect.innerHTML='<option value="">Loading vehicles...</option>';
+    try{
+      const response=await fetch('<?=e(url('admin/rfid-vehicles.php'))?>?user_id='+encodeURIComponent(select.value),{headers:{'Accept':'application/json'},cache:'no-store'});
+      const data=await response.json();
+      if(!data.ok)throw new Error(data.message||'Could not load this resident\'s vehicles.');
+      vehicleSelect.innerHTML='<option value="">Select the vehicle for this RFID card...</option>';
+      data.vehicles.forEach(v=>{
+        const o=document.createElement('option');
+        o.value=v.id;
+        o.dataset.plate=v.plate_number||'';
+        o.textContent=v.plate_number+' — '+(v.vehicle_type||'Vehicle')+(v.color?' — '+v.color:'');
+        vehicleSelect.appendChild(o);
+      });
+      if(!data.vehicles.length){
+        const o=document.createElement('option');
+        o.value='';
+        o.textContent='No active vehicles found for this resident';
+        vehicleSelect.appendChild(o);
+      }
+    }catch(err){
+      vehicleSelect.innerHTML='<option value="">Unable to load vehicles</option>';
+      showStatus('danger','Vehicle list unavailable.',err.message||'Could not load the selected resident\'s vehicles.');
+    }finally{
+      vehicleSelect.disabled=false;
+      updateCode();
+    }
+  };
   const showStatus=(kind,title,message,withBack=false)=>{statusBox.className='mt-2 p-3 rounded-4 '+(kind==='success'?'bg-success-subtle text-success-emphasis':kind==='danger'?'bg-danger-subtle text-danger-emphasis':'bg-light');statusBox.innerHTML='<strong>'+title+'</strong><div class="small mt-1">'+message+'</div>'+(withBack?'<a class="btn btn-sm btn-outline-success mt-3" href="<?=e(url('admin/rfid.php'))?>">Back to RFID Management</a>':'');};
-  select.addEventListener('change',update); update();
+  select.addEventListener('change',loadVehicles);
+  vehicleSelect.addEventListener('change',updateCode);
+  loadVehicles();
   form.addEventListener('submit',async(e)=>{
     e.preventDefault();
-    if(!select.value){showStatus('danger','Select an account.','Choose a resident or staff account before starting.');return;}
+    if(!select.value){showStatus('danger','Select an account.','Choose a resident or staff account before starting.');return;} if(roles[select.value]==='resident'&&!vehicleSelect.value){showStatus('danger','Select a vehicle.','Choose the resident vehicle that will use this RFID card.');return;}
     button.disabled=true; button.textContent='WAITING FOR RFID...'; showStatus('info','Waiting for card.','The ESP32 + RC522 is waiting for the physical RFID card.');
     try{
       const res=await fetch('<?=e(url('admin/rfid.php'))?>',{method:'POST',body:new FormData(form),headers:{'Accept':'application/json'},cache:'no-store'});

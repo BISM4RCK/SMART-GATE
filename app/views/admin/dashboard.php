@@ -85,20 +85,6 @@ include app_path('views/layouts/header.php');
                 <div class="small text-muted">Review and respond to resident concerns and support tickets.</div>
             </a>
         </div>
-        <div class="col-md-6 col-xl-3">
-            <div class="gh-card p-4 h-100">
-                <div class="fs-3 mb-2"><i class="bi bi-shield-check"></i></div>
-                <h5 class="mb-1">Admin Access</h5>
-                <div class="small text-muted">Account, vehicle, blacklist, audit-log, gate-control, walk-in, ticket, and customization controls are retained.</div>
-            </div>
-        </div>
-        <div class="col-md-6 col-xl-3">
-            <div class="gh-card p-4 h-100">
-                <div class="fs-3 mb-2"><i class="bi bi-qr-code-scan"></i></div>
-                <h5 class="mb-1">Gate Scan</h5>
-                <div class="small text-muted">Gate scanning is handled from the guard workflow.</div>
-            </div>
-        </div>
     </section>
 
     <div class="row g-2 gh-small-stats mb-4">
