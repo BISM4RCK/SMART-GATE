@@ -71,7 +71,11 @@ class UserVehicleModel
 
 class GateCommandModel
 {
-    public static function create(int $userId,string $role,string $command,string $source,array $payload=[]): int { $s=Database::pdo()->prepare("INSERT INTO gate_commands(issued_by,issued_by_role,command,source,payload,status,completed_at) VALUES(?,?,?,?,?,'completed',NOW())");$s->execute([$userId,$role,$command,$source,json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)]);return (int)Database::pdo()->lastInsertId(); }
+    public static function create(int $userId,string $role,string $command,string $source,array $payload=[]): int { $s=Database::pdo()->prepare("INSERT INTO gate_commands(issued_by,issued_by_role,command,source,payload,status) VALUES(?,?,?,?,?,'pending')");$s->execute([$userId,$role,$command,$source,json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)]);return (int)Database::pdo()->lastInsertId();
+    }
+    public static function find(int $id): ?array { $s=Database::pdo()->prepare('SELECT * FROM gate_commands WHERE id=? LIMIT 1');$s->execute([$id]);return $s->fetch()?:null; }
+    public static function waitingForDevice(): ?array { $s=Database::pdo()->prepare("SELECT * FROM gate_commands WHERE command='open_gate' AND status='pending' ORDER BY created_at ASC LIMIT 1");$s->execute();return $s->fetch()?:null; }
+    public static function complete(int $id,string $status='completed'): bool { $s=Database::pdo()->prepare("UPDATE gate_commands SET status=?,completed_at=NOW() WHERE id=? AND status='pending'");$s->execute([$status,$id]);return $s->rowCount()>0; }
 }
 
 class BlacklistModel
@@ -347,8 +351,8 @@ class RfidCardModel
             if(!$resident || !$vehicle || (int)$vehicle['resident_id']!==(int)$resident['id'] || ($vehicle['status']??'active')!=='active') throw new RuntimeException('The selected RFID vehicle does not belong to this resident.');
         } else { $vehicleId=null; }
         $old=Database::pdo()->prepare("UPDATE rfid_cards SET uid=NULL,status='void',voided_by=?,voided_at=NOW(),notes=CASE WHEN notes IS NULL OR notes='' THEN 'Replaced by a new RFID credential' ELSE CONCAT(notes,' | Replaced by a new RFID credential') END WHERE user_id=? AND status='active'"); $old->execute([$issuedBy,$userId]);
-        $s=Database::pdo()->prepare("INSERT INTO rfid_cards (user_id,uid,credential_code,status,issued_by,issued_at,notes) VALUES (?,?,?,'active',?,NOW(),?)");
-        $s->execute([$userId,$uid,$credentialCode,$issuedBy,trim($notes)?:null]); return (int)Database::pdo()->lastInsertId();
+        $s=Database::pdo()->prepare("INSERT INTO rfid_cards (user_id,vehicle_id,uid,credential_code,status,issued_by,issued_at,notes) VALUES (?,?,?,?,'active',?,NOW(),?)");
+        $s->execute([$userId,$vehicleId,$uid,$credentialCode,$issuedBy,trim($notes)?:null]); return (int)Database::pdo()->lastInsertId();
     }
 
     public static function void(int $id,int $voidedBy,string $notes=''): bool
@@ -620,12 +624,12 @@ class GateLogModel
         $matched=null;$rfidProfile=null;$visitor=null;$walkIn=null;
         if($qr!=='')$visitor=VisitorCredentialModel::findByToken($qr,'qr');
         if(!$visitor&&$barcode!==''){$visitor=VisitorCredentialModel::findByToken($barcode,'barcode');if(!$visitor)$walkIn=WalkInVisitorModel::findByToken($barcode);}
-        if(!$walkIn&&!empty($payload['visitor_id']))$walkIn=WalkInVisitorModel::findByVisitorId((string)$payload['visitor_id']);
+        if(!$walkIn&&!empty($payload['visitor_id'])){ $visitor=VisitorCredentialModel::findByVisitorId((string)$payload['visitor_id']); if(!$visitor) $walkIn=WalkInVisitorModel::findByVisitorId((string)$payload['visitor_id']); }
         if($rfid!==''){$rfidProfile=RfidCardModel::findByUid($rfid);if(!$rfidProfile)$matched=VehicleModel::findByRfid($rfid);}
         $plate=!empty($payload['plate_number'])?trim((string)$payload['plate_number']):($matched['plate_number']??($walkIn['plate_number']??null));
         if(!$matched&&$plate)$matched=VehicleModel::findByPlate($plate);
         $residentId=$matched['resident_id']??null;$vehicleId=($matched&&!empty($matched['resident_id']))?$matched['id']:null;$visitorRequestId=$visitor['visitor_request_id']??null;$walkInId=$walkIn['id']??null;
-        if($visitor){$gateStatus=match($visitor['status']){'approved'=>'approved','pending'=>'pending','rejected'=>'denied',default=>'denied'};$notes='Visitor credential '.$visitor['visitor_id'].' is '.$visitor['status'];$event=$qr?'qr_scan':'barcode_scan';}
+        if($visitor){$gateStatus=match($visitor['status']){'approved'=>'approved','pending'=>'pending','rejected'=>'denied',default=>'denied'};$notes='Visitor credential '.$visitor['visitor_id'].' is '.$visitor['status'];$event=!empty($payload['visitor_id'])?'visitor_id_check':($qr?'qr_scan':'barcode_scan');}
         elseif($walkIn){$gateStatus='approved';$notes='Walk-in visitor '.$walkIn['visitor_id'].' checked in';$event='walk_in_checkin';}
         elseif($rfidProfile){
             $gateStatus='approved';
@@ -635,6 +639,7 @@ class GateLogModel
                 if($matched){ $plate=$matched['plate_number']??$plate; $vehicleId=(int)$matched['id']; $residentId=(int)$matched['resident_id']; $notes.=' / vehicle '.$plate; }
             }
             if(($rfidProfile['role']??'')==='resident' && !$residentId){ $rr=ResidentModel::findByUserId((int)$rfidProfile['user_id']); $residentId=$rr?(int)$rr['id']:null; }
+            if($plate && BlacklistModel::isActivePlate($plate)){ $gateStatus='denied'; $notes='Plate is on the active blacklist'; }
         }
         else {$blacklisted=$plate?BlacklistModel::isActivePlate($plate):false;$gateStatus=$blacklisted?'denied':($matched?'approved':'denied');$notes=$blacklisted?'Plate is on the active blacklist':($matched?'Matched '.($rfid?'RFID':'vehicle'):'No matching RFID/QR credential found');}
         if($manual){$gateStatus='manual_override';$notes='Manual gate override by authorized account';}
@@ -642,6 +647,16 @@ class GateLogModel
         $s=$pdo->prepare('INSERT INTO gate_logs(resident_id,vehicle_id,visitor_request_id,walk_in_id,guard_id,actor_user_id,actor_role,rfid_uid,plate_number,event_type,gate_status,source_device,raw_payload,log_notes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)'); $s->execute([$residentId,$vehicleId,$visitorRequestId,$walkInId,$guardId,$actorUserId,$actorRole,$rfid?:null,$plate?:null,$event,$gateStatus,$source,$raw,$notes]);
         return ['ok'=>true,'gate_status'=>$gateStatus,'matched'=>(bool)($matched||$rfidProfile||$visitor||$walkIn),'notes'=>$notes,'log_id'=>(int)$pdo->lastInsertId(),'visitor'=>$visitor,'walk_in'=>$walkIn];
     }
+    public static function latestRfidAfter(int $afterId): ?array {
+        $rows=self::rfidEventsAfter($afterId,1);
+        return $rows[0]??null;
+    }
+    public static function rfidEventsAfter(int $afterId, int $limit=20): array {
+        $limit=max(1,min(50,$limit));
+        $sql="SELECT gl.*,u.full_name AS actor_name,u.role AS actor_role FROM gate_logs gl LEFT JOIN users u ON u.id=gl.actor_user_id WHERE gl.id>? AND gl.event_type='rfid_scan' ORDER BY gl.id ASC LIMIT {$limit}";
+        $s=Database::pdo()->prepare($sql);$s->execute([$afterId]);return $s->fetchAll();
+    }
+    public static function latestId(): int { return (int)(Database::pdo()->query("SELECT COALESCE(MAX(id),0) id FROM gate_logs")->fetch()['id']??0); }
     public static function all(array $filters=[]): array { $where=[];$params=[]; if(($filters['event_type']??'')!==''){ $where[]='gl.event_type=?';$params[]=$filters['event_type']; } if(($filters['gate_status']??'')!==''){ $where[]='gl.gate_status=?';$params[]=$filters['gate_status']; } if(($filters['actor_user_id']??'')!==''){ $where[]='gl.actor_user_id=?';$params[]=(int)$filters['actor_user_id']; } if(($filters['search']??'')!==''){ $where[]='(gl.plate_number LIKE ? OR gl.rfid_uid LIKE ? OR gl.log_notes LIKE ?)';$term='%'.$filters['search'].'%';array_push($params,$term,$term,$term); } $sql='SELECT gl.*,u.full_name AS actor_name,u.role AS actor_role FROM gate_logs gl LEFT JOIN users u ON u.id=gl.actor_user_id';if($where)$sql.=' WHERE '.implode(' AND ',$where);$sql.=' ORDER BY gl.created_at DESC LIMIT 500';$st=Database::pdo()->prepare($sql);$st->execute($params);return $st->fetchAll(); }
 }
 

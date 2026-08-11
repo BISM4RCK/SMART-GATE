@@ -12,7 +12,7 @@ $roleLabel=function($role){return $role==='resident'?'Resident':ucfirst($role);}
         <div class="col-xl-5">
             <div class="gh-card p-4 h-100">
                 <h5 class="mb-1"><i class="bi bi-credit-card-2-front me-2"></i>Burn / Program RFID Profile</h5>
-                <div class="small text-muted mb-3">Choose an account, then present its card to the reader.</div>
+                <div class="small text-muted mb-3">Choose an account, then present its card to the ESP32 + RC522 reader.</div>
                 <form method="post" id="rfidBurnForm" class="d-grid gap-3">
                     <?=csrf_field()?>
                     <input type="hidden" name="action" value="assign">
@@ -37,7 +37,7 @@ $roleLabel=function($role){return $role==='resident'?'Resident':ucfirst($role);}
                         <strong>Generated Smart Gate RFID ID</strong><br><code id="generatedRfidCode">Select an account</code>
                         <div class="small text-muted mt-1">Residents: <code>res00Block-Lot-Letter-PLATE</code> · Admins: <code>adm00AccountNumber</code> · Guards: <code>grd00AccountNumber</code>.</div>
                     </div>
-                    <div class="small text-muted"></div>
+                    <div class="small text-muted">The physical RC522 UID is captured automatically by the ESP32.</div>
                     <div>
                         <label class="form-label" for="rfidNotes">Notes <span class="text-muted">(optional)</span></label>
                         <textarea class="form-control" id="rfidNotes" name="notes" rows="2" placeholder="Card issue, replacement, reason, etc."></textarea>

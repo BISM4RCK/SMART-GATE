@@ -30,6 +30,23 @@ CREATE TABLE IF NOT EXISTS user_vehicles(
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS color VARCHAR(50) NULL;
 
+-- Demo accounts and vehicles for gate testing.
+INSERT INTO users (full_name,email,password,role,status)
+SELECT 'Golden Resident Two','resident2@goldenhomes.local',password,'resident','active' FROM users WHERE email='resident@goldenhomes.local' AND NOT EXISTS (SELECT 1 FROM users WHERE email='resident2@goldenhomes.local') LIMIT 1;
+SET @resident2_user_id=(SELECT id FROM users WHERE email='resident2@goldenhomes.local' LIMIT 1);
+INSERT INTO residents (user_id,house_number,block_number,lot_number,household_letter,contact_number)
+SELECT @resident2_user_id,'15-7-B','15','7','B','09171234568' WHERE @resident2_user_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM residents WHERE user_id=@resident2_user_id);
+SET @resident2_id=(SELECT id FROM residents WHERE user_id=@resident2_user_id LIMIT 1);
+INSERT INTO vehicles (resident_id,plate_number,vehicle_type,brand,model,color)
+SELECT @resident2_id,'DEF 2468','car','Mitsubishi','Mirage','Silver' WHERE @resident2_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM vehicles WHERE plate_number='DEF 2468');
+INSERT INTO vehicles (resident_id,plate_number,vehicle_type,brand,model,color)
+SELECT @resident2_id,'GHI 1357','motorcycle','Yamaha','Mio','Blue' WHERE @resident2_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM vehicles WHERE plate_number='GHI 1357');
+INSERT INTO user_vehicles (user_id,plate_number,vehicle_type,color) SELECT id,'GRD 1001','car','Black' FROM users WHERE email='guard@goldenhomes.local' AND NOT EXISTS (SELECT 1 FROM user_vehicles WHERE plate_number='GRD 1001');
+INSERT INTO user_vehicles (user_id,plate_number,vehicle_type,color) SELECT id,'GRD 2002','motorcycle','Red' FROM users WHERE email='guard@goldenhomes.local' AND NOT EXISTS (SELECT 1 FROM user_vehicles WHERE plate_number='GRD 2002');
+INSERT INTO user_vehicles (user_id,plate_number,vehicle_type,color) SELECT id,'ADM 3003','car','White' FROM users WHERE email='admin@goldenhomes.local' AND NOT EXISTS (SELECT 1 FROM user_vehicles WHERE plate_number='ADM 3003');
+INSERT INTO user_vehicles (user_id,plate_number,vehicle_type,color) SELECT id,'ADM 4004','motorcycle','Gray' FROM users WHERE email='admin@goldenhomes.local' AND NOT EXISTS (SELECT 1 FROM user_vehicles WHERE plate_number='ADM 4004');
+
+
 -- BISM4RCK-KUN3H0 2026
 ALTER TABLE residents MODIFY COLUMN house_number VARCHAR(50) NOT NULL;
 ALTER TABLE gate_logs ADD COLUMN IF NOT EXISTS walk_in_id BIGINT UNSIGNED NULL AFTER visitor_request_id;
@@ -110,7 +127,7 @@ CREATE TABLE rfid_scan_sessions (
     CONSTRAINT fk_rfid_scan_actor FOREIGN KEY(actor_user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- RFID gate scan updates for existing Smart Gate installations.
+-- Continuous RFID access and ESP32 gate-control updates for existing Smart Gate installations.
 ALTER TABLE rfid_cards ADD COLUMN IF NOT EXISTS credential_code VARCHAR(100) NULL;
 CREATE TABLE IF NOT EXISTS rfid_scan_sessions (
  id CHAR(32) PRIMARY KEY, device_id VARCHAR(64) NOT NULL, actor_user_id BIGINT UNSIGNED NOT NULL, actor_role ENUM('guard','admin') NOT NULL, purpose ENUM('gate','burn') NOT NULL DEFAULT 'gate', target_user_id BIGINT UNSIGNED NULL, target_vehicle_id BIGINT UNSIGNED NULL, notes VARCHAR(255) NULL, status ENUM('waiting','submitted','approved','error','expired') NOT NULL DEFAULT 'waiting', rfid_uid VARCHAR(100) NULL, result_json LONGTEXT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, expires_at DATETIME NOT NULL, KEY idx_rfid_scan_device_status(device_id,status,expires_at), KEY idx_rfid_scan_target(target_user_id), KEY idx_rfid_scan_vehicle(target_vehicle_id), CONSTRAINT fk_rfid_scan_target FOREIGN KEY(target_user_id) REFERENCES users(id) ON DELETE SET NULL, CONSTRAINT fk_rfid_scan_vehicle FOREIGN KEY(target_vehicle_id) REFERENCES vehicles(id) ON DELETE SET NULL, CONSTRAINT fk_rfid_scan_actor FOREIGN KEY(actor_user_id) REFERENCES users(id) ON DELETE CASCADE

@@ -426,6 +426,26 @@ CREATE TABLE IF NOT EXISTS user_vehicles(
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS color VARCHAR(50) NULL;
 
+INSERT INTO users (full_name, email, password, role, status)
+SELECT 'Golden Resident Two', 'resident2@goldenhomes.local', password, 'resident', 'active' FROM users WHERE email='resident@goldenhomes.local' LIMIT 1;
+SET @resident2_user_id = (SELECT id FROM users WHERE email='resident2@goldenhomes.local' LIMIT 1);
+INSERT INTO residents (user_id, house_number, block_number, lot_number, household_letter, contact_number)
+VALUES (@resident2_user_id, '15-7-B', '15', '7', 'B', '09171234568');
+SET @resident2_id = (SELECT id FROM residents WHERE user_id=@resident2_user_id LIMIT 1);
+INSERT INTO vehicles (resident_id, plate_number, vehicle_type, brand, model, color) VALUES
+(@resident2_id, 'DEF 2468', 'car', 'Mitsubishi', 'Mirage', 'Silver'),
+(@resident2_id, 'GHI 1357', 'motorcycle', 'Yamaha', 'Mio', 'Blue');
+
+INSERT INTO user_vehicles (user_id, plate_number, vehicle_type, color)
+SELECT @guard_user_id, 'GRD 1001', 'car', 'Black' WHERE NOT EXISTS (SELECT 1 FROM user_vehicles WHERE user_id=@guard_user_id AND plate_number='GRD 1001');
+INSERT INTO user_vehicles (user_id, plate_number, vehicle_type, color)
+SELECT @guard_user_id, 'GRD 2002', 'motorcycle', 'Red' WHERE NOT EXISTS (SELECT 1 FROM user_vehicles WHERE user_id=@guard_user_id AND plate_number='GRD 2002');
+INSERT INTO user_vehicles (user_id, plate_number, vehicle_type, color)
+SELECT @admin_user_id, 'ADM 3003', 'car', 'White' WHERE NOT EXISTS (SELECT 1 FROM user_vehicles WHERE user_id=@admin_user_id AND plate_number='ADM 3003');
+INSERT INTO user_vehicles (user_id, plate_number, vehicle_type, color)
+SELECT @admin_user_id, 'ADM 4004', 'motorcycle', 'Gray' WHERE NOT EXISTS (SELECT 1 FROM user_vehicles WHERE user_id=@admin_user_id AND plate_number='ADM 4004');
+
+
 INSERT INTO visitor_credentials (visitor_request_id, visitor_id, qr_token_hash, barcode_token_hash, qr_token, barcode_token) VALUES
 ((SELECT id FROM visitor_requests WHERE qr_reference='GH-REQ-0001' LIMIT 1), 'DEMO01', SHA2('GHQR-DEMO01',256), SHA2('GHBC-DEMO01',256), 'GHQR-DEMO01', 'GHBC-DEMO01'),
 ((SELECT id FROM visitor_requests WHERE qr_reference='GH-REQ-0002' LIMIT 1), 'DEMO02', SHA2('GHQR-DEMO02',256), SHA2('GHBC-DEMO02',256), 'GHQR-DEMO02', 'GHBC-DEMO02');

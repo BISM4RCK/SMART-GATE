@@ -226,21 +226,29 @@ class GuardController
     public function dashboard(): void
     {
         require_role('guard');
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'gate_override') {
-            csrf_validate();
-            $plate = strtoupper(trim($_POST['plate_number'] ?? ''));
-            $emergency = !empty($_POST['emergency']);
-            if ($plate === '' && !$emergency) { flash_set('danger', 'Enter a plate number or tick Emergency.'); redirect('guard/dashboard.php'); }
-            $reason = trim($_POST['reason'] ?? '') ?: ($emergency ? 'Emergency manual override' : 'Manual gate override');
-            $me = current_user();
-            $cmd = GateCommandModel::create((int)$me['id'], 'guard', 'open_gate', 'guard-dashboard', ['plate_number'=>$plate, 'emergency'=>$emergency, 'reason'=>$reason]);
-            GateLogModel::createAccess(['event_type'=>'manual_open','source_device'=>'guard-dashboard','manual_override'=>1,'plate_number'=>$plate,'guard_id'=>(int)$me['id'],'actor_user_id'=>(int)$me['id'],'actor_role'=>'guard','raw_payload'=>['command_id'=>$cmd,'plate_number'=>$plate,'emergency'=>$emergency,'reason'=>$reason]]);
-            activity_log('gate_override', 'Gate opened manually. Command '.$cmd.' / '.($plate ?: 'EMERGENCY'));
-            flash_set('success', 'Gate override issued and logged.');
-            redirect('guard/dashboard.php');
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            csrf_validate(); $action=strtolower(trim($_POST['action']??''));
+            if ($action==='gate_override') {
+                $plate=strtoupper(trim($_POST['plate_number']??'')); $emergency=!empty($_POST['emergency']);
+                if($plate===''&&!$emergency){flash_set('danger','Enter a plate number or tick Emergency.');redirect('guard/dashboard.php');}
+                $reason=trim($_POST['reason']??'')?:($emergency?'Emergency manual override':'Manual gate override');$me=current_user();
+                $cmd=GateCommandModel::create((int)$me['id'],'guard','open_gate','guard-dashboard',['plate_number'=>$plate,'emergency'=>$emergency,'reason'=>$reason]);
+                GateLogModel::createAccess(['event_type'=>'manual_open','source_device'=>'guard-dashboard','manual_override'=>1,'plate_number'=>$plate,'guard_id'=>(int)$me['id'],'actor_user_id'=>(int)$me['id'],'actor_role'=>'guard','raw_payload'=>['command_id'=>$cmd,'plate_number'=>$plate,'emergency'=>$emergency,'reason'=>$reason]]);
+                activity_log('gate_override','Gate opening command issued. Command '.$cmd.' / '.($plate?:'EMERGENCY')); redirect('guard/dashboard.php?gate_command='.$cmd);
+            }
+            if ($action==='visitor_id_check') {
+                $visitorId=strtoupper(trim($_POST['visitor_id']??''));
+                if(!preg_match('/^[A-Z0-9]{6}$/',$visitorId)){flash_set('danger','Enter a valid 6-character Visitor ID.');redirect('guard/dashboard.php');}
+                $result=GateLogModel::createAccess(['visitor_id'=>$visitorId,'event_type'=>'visitor_id_check','source_device'=>'guard-dashboard','actor_user_id'=>(int)current_user()['id'],'actor_role'=>'guard','guard_id'=>(int)current_user()['id'],'raw_payload'=>$_POST]);
+                if($result['gate_status']==='approved'){ $cmd=GateCommandModel::create((int)current_user()['id'],'guard','open_gate','guard-visitor-id',['visitor_id'=>$visitorId,'gate_log_id'=>$result['log_id']]); activity_log('visitor_id_check','Visitor '.$visitorId.' approved; gate command '.$cmd.' issued.'); redirect('guard/dashboard.php?gate_command='.$cmd); }
+                flash_set($result['gate_status']==='pending'?'warning':'danger',$result['gate_status']==='pending'?'Request still pending.':'Denied.'); redirect('guard/dashboard.php');
+            }
         }
-        View::render('guard/dashboard', ['pageTitle'=>'Guard Dashboard','stats'=>['pending'=>count_rows("SELECT COUNT(*) c FROM visitor_requests WHERE status = 'pending'"),'logs'=>count_rows("SELECT COUNT(*) c FROM gate_logs"),'tickets'=>TicketModel::openCount(),'vehicles'=>count_rows("SELECT COUNT(*) c FROM vehicles")],'requests'=>array_slice(VisitorRequestModel::all(),0,6),'logs'=>array_slice(GateLogModel::recent(8),0,8)]);
+        View::render('guard/dashboard',['pageTitle'=>'Guard Dashboard','stats'=>['pending'=>count_rows("SELECT COUNT(*) c FROM visitor_requests WHERE status = 'pending'"),'logs'=>count_rows("SELECT COUNT(*) c FROM gate_logs"),'tickets'=>TicketModel::openCount(),'vehicles'=>count_rows("SELECT COUNT(*) c FROM vehicles")],'requests'=>array_slice(VisitorRequestModel::all(),0,6),'logs'=>array_slice(GateLogModel::recent(8),0,8),'latestGateLogId'=>GateLogModel::latestId(),'gateCommandId'=>(int)($_GET['gate_command']??0)]);
     }
+
+    public function liveRfid(): void { require_role('guard'); $after=(int)($_GET['after_id']??0); json_response(['ok'=>true,'log'=>GateLogModel::latestRfidAfter($after)]); }
+    public function gateCommandStatus(): void { require_role('guard'); $id=(int)($_GET['command_id']??0); $cmd=GateCommandModel::find($id); if(!$cmd) json_response(['ok'=>false,'message'=>'Gate command not found.'],404); json_response(['ok'=>true,'status'=>$cmd['status'],'command_id'=>(int)$cmd['id']]); }
 
     public function logs(): void
     {
@@ -254,38 +262,6 @@ class GuardController
         require_role('guard'); $me=current_user();
         $filters=['account_type'=>'guard','user_id'=>(string)$me['id'],'action'=>trim($_GET['action']??'')];
         View::render('guard/activity_logs',['pageTitle'=>'Guard Activity Logs','activityLogs'=>AccountActivityLogModel::filtered($filters,200),'activityFilters'=>$filters]);
-    }
-
-    public function scan(): void
-    {
-        require_role('guard');
-        $me=current_user(); $target='guard/scan.php';
-        if ($_SERVER['REQUEST_METHOD']==='POST') {
-            csrf_validate();
-            $action=strtolower(trim($_POST['action']??''));
-            if($action==='start_rfid_scan'){
-                $sessionId=RfidScanSessionModel::create(ESP32_DEVICE_ID,(int)$me['id'],'guard');
-                json_response(['ok'=>true,'session_id'=>$sessionId,'message'=>'Waiting for RFID scan...']);
-            }
-            $rfid=trim($_POST['rfid_uid']??''); $qr=trim($_POST['qr_token']??''); $barcode=trim($_POST['barcode_token']??'');
-            if($rfid===''&&$qr===''&&$barcode===''){flash_set('warning','Scan an RFID, QR, or barcode credential.');redirect($target);}
-            $result=GateLogModel::createAccess(['rfid_uid'=>$rfid,'qr_token'=>$qr,'barcode_token'=>$barcode,'event_type'=>$qr?'qr_scan':($barcode?'barcode_scan':'rfid_scan'),'source_device'=>'guard-panel','guard_id'=>(int)$me['id'],'actor_user_id'=>(int)$me['id'],'actor_role'=>$me['role'],'raw_payload'=>$_POST]);
-            activity_log('gate_scan',$result['notes']);
-            flash_set(in_array($result['gate_status'],['approved','manual_override'],true)?'success':($result['gate_status']==='pending'?'warning':'danger'),$result['notes']);
-            redirect($target);
-        }
-        View::render('guard/scan',['pageTitle'=>'Quick Scan','logs'=>GateLogModel::recent(10),'requests'=>VisitorRequestModel::all()]);
-    }
-
-    public function scanResult(): void
-    {
-        require_role('guard');
-        $me=current_user(); $id=trim((string)($_GET['session_id']??''));
-        if($id==='') json_response(['ok'=>false,'message'=>'Missing scan session.'],422);
-        $session=RfidScanSessionModel::get($id,(int)$me['id']);
-        if(!$session) json_response(['ok'=>false,'message'=>'Scan session not found.'],404);
-        $result=$session['result_json']?json_decode($session['result_json'],true):null;
-        json_response(['ok'=>true,'status'=>$session['status'],'result'=>$result,'message'=>$result['message']??null]);
     }
 
     public function walkIn(): void
@@ -332,15 +308,24 @@ class AdminController
     public function dashboard(): void
     {
         require_role('admin');
-        if($_SERVER['REQUEST_METHOD']==='POST'&&($_POST['action']??'')==='gate_override'){
-            csrf_validate();$plate=strtoupper(trim($_POST['plate_number']??''));$emergency=!empty($_POST['emergency']);
-            if($plate===''&&!$emergency){flash_set('danger','Enter a plate number or tick Emergency.');redirect('admin/dashboard.php');}
-            $reason=trim($_POST['reason']??'')?:($emergency?'Emergency manual override':'Manual gate override');$me=current_user();
-            $cmd=GateCommandModel::create((int)$me['id'],'admin','open_gate','admin-dashboard',['plate_number'=>$plate,'emergency'=>$emergency,'reason'=>$reason]);
-            GateLogModel::createAccess(['event_type'=>'manual_open','source_device'=>'admin-dashboard','manual_override'=>1,'plate_number'=>$plate,'actor_user_id'=>(int)$me['id'],'actor_role'=>'admin','raw_payload'=>['command_id'=>$cmd,'plate_number'=>$plate,'emergency'=>$emergency,'reason'=>$reason]]);
-            activity_log('gate_override','Gate opened manually. Command '.$cmd.' / '.($plate?:'EMERGENCY'));flash_set('success','Gate override issued and logged.');redirect('admin/dashboard.php');
+        if($_SERVER['REQUEST_METHOD']==='POST'){
+            csrf_validate();$action=strtolower(trim($_POST['action']??''));
+            if($action==='gate_override'){
+                $plate=strtoupper(trim($_POST['plate_number']??''));$emergency=!empty($_POST['emergency']);
+                if($plate===''&&!$emergency){flash_set('danger','Enter a plate number or tick Emergency.');redirect('admin/dashboard.php');}
+                $reason=trim($_POST['reason']??'')?:($emergency?'Emergency manual override':'Manual gate override');$me=current_user();
+                $cmd=GateCommandModel::create((int)$me['id'],'admin','open_gate','admin-dashboard',['plate_number'=>$plate,'emergency'=>$emergency,'reason'=>$reason]);
+                GateLogModel::createAccess(['event_type'=>'manual_open','source_device'=>'admin-dashboard','manual_override'=>1,'plate_number'=>$plate,'actor_user_id'=>(int)$me['id'],'actor_role'=>'admin','raw_payload'=>['command_id'=>$cmd,'plate_number'=>$plate,'emergency'=>$emergency,'reason'=>$reason]]);
+                activity_log('gate_override','Gate opening command issued. Command '.$cmd.' / '.($plate?:'EMERGENCY'));redirect('admin/dashboard.php?gate_command='.$cmd);
+            }
+            if($action==='visitor_id_check'){
+                $visitorId=strtoupper(trim($_POST['visitor_id']??'')); if(!preg_match('/^[A-Z0-9]{6}$/',$visitorId)){flash_set('danger','Enter a valid 6-character Visitor ID.');redirect('admin/dashboard.php');}
+                $result=GateLogModel::createAccess(['visitor_id'=>$visitorId,'event_type'=>'visitor_id_check','source_device'=>'admin-dashboard','actor_user_id'=>(int)current_user()['id'],'actor_role'=>'admin','raw_payload'=>$_POST]);
+                if($result['gate_status']==='approved'){ $cmd=GateCommandModel::create((int)current_user()['id'],'admin','open_gate','admin-visitor-id',['visitor_id'=>$visitorId,'gate_log_id'=>$result['log_id']]); activity_log('visitor_id_check','Visitor '.$visitorId.' approved; gate command '.$cmd.' issued.');redirect('admin/dashboard.php?gate_command='.$cmd);}
+                flash_set($result['gate_status']==='pending'?'warning':'danger',$result['gate_status']==='pending'?'Request still pending.':'Denied.');redirect('admin/dashboard.php');
+            }
         }
-        View::render('admin/dashboard',['pageTitle'=>'Admin Dashboard','stats'=>['residents'=>count_rows('SELECT COUNT(*) c FROM residents'),'requests'=>count_rows('SELECT COUNT(*) c FROM visitor_requests'),'tickets'=>TicketModel::openCount(),'logs'=>count_rows('SELECT COUNT(*) c FROM gate_logs')],'tickets'=>array_slice(TicketModel::all(),0,5),'logs'=>array_slice(GateLogModel::recent(8),0,8)]);
+        View::render('admin/dashboard',['pageTitle'=>'Admin Dashboard','stats'=>['residents'=>count_rows('SELECT COUNT(*) c FROM residents'),'requests'=>count_rows('SELECT COUNT(*) c FROM visitor_requests'),'tickets'=>TicketModel::openCount(),'logs'=>count_rows('SELECT COUNT(*) c FROM gate_logs')],'tickets'=>array_slice(TicketModel::all(),0,5),'logs'=>array_slice(GateLogModel::recent(8),0,8),'latestGateLogId'=>GateLogModel::latestId(),'gateCommandId'=>(int)($_GET['gate_command']??0)]);
     }
     public function walkIn(): void { require_role('admin'); (new GuardController())->walkIn(); }
     public function tickets(): void
@@ -427,28 +412,8 @@ class AdminController
         json_response(['ok'=>true,'vehicles'=>$vehicles]);
     }
 
-    public function rfidScan(): void
-    {
-        require_role('admin');
-        $me=current_user(); $target='admin/rfid-scan.php';
-        if($_SERVER['REQUEST_METHOD']==='POST'){
-            csrf_validate();
-            if(strtolower(trim($_POST['action']??''))==='start_rfid_scan'){
-                $sessionId=RfidScanSessionModel::create(ESP32_DEVICE_ID,(int)$me['id'],'admin','gate');
-                json_response(['ok'=>true,'session_id'=>$sessionId,'message'=>'Waiting for RFID scan...']);
-            }
-        }
-        View::render('admin/rfid_scan',['pageTitle'=>'RFID Gate Scan','logs'=>GateLogModel::recent(10)]);
-    }
-
-    public function rfidScanResult(): void
-    {
-        require_role('admin'); $me=current_user(); $id=trim((string)($_GET['session_id']??''));
-        if($id==='') json_response(['ok'=>false,'message'=>'Missing scan session.'],422);
-        $session=RfidScanSessionModel::get($id,(int)$me['id']); if(!$session) json_response(['ok'=>false,'message'=>'Scan session not found.'],404);
-        $result=$session['result_json']?json_decode($session['result_json'],true):null;
-        json_response(['ok'=>true,'status'=>$session['status'],'result'=>$result,'message'=>$result['message']??null]);
-    }
+    public function liveRfid(): void { require_role('admin'); $after=(int)($_GET['after_id']??0); json_response(['ok'=>true,'log'=>GateLogModel::latestRfidAfter($after)]); }
+    public function gateCommandStatus(): void { require_role('admin'); $id=(int)($_GET['command_id']??0); $cmd=GateCommandModel::find($id); if(!$cmd) json_response(['ok'=>false,'message'=>'Gate command not found.'],404); json_response(['ok'=>true,'status'=>$cmd['status'],'command_id'=>(int)$cmd['id']]); }
 
     public function activityLogs(): void
     {
@@ -552,7 +517,7 @@ class Esp32Controller
         $this->requireEsp32Key();
         if ($_SERVER['REQUEST_METHOD'] !== 'GET') json_response(['ok'=>false,'message'=>'Method not allowed'],405);
         $session=RfidScanSessionModel::waitingForDevice(ESP32_DEVICE_ID);
-        $payload=['ok'=>true,'scan_requested'=>(bool)$session,'session_id'=>$session['id']??null,'purpose'=>$session['purpose']??'gate'];
+        $payload=['ok'=>true,'scan_requested'=>true,'continuous'=>!$session,'session_id'=>$session['id']??null,'purpose'=>$session['purpose']??'continuous'];
         if($session && ($session['purpose']??'gate')==='burn'){
             $target=UserModel::findById((int)$session['target_user_id']);
             $vehicle=!empty($session['target_vehicle_id'])?VehicleModel::find((int)$session['target_vehicle_id']):null;
@@ -566,7 +531,9 @@ class Esp32Controller
         $this->requireEsp32Key();
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') json_response(['ok'=>false,'message'=>'Method not allowed'],405);
         $sessionId=trim((string)($_POST['session_id']??'')); $uid=strtoupper(trim((string)($_POST['rfid_uid']??'')));
-        if(!preg_match('/^[a-f0-9:.-]{4,100}$/i',$uid) || $sessionId==='') json_response(['ok'=>false,'message'=>'Invalid scan payload.'],422);
+        if(!preg_match('/^[a-f0-9:.-]{4,100}$/i',$uid)) json_response(['ok'=>false,'message'=>'Invalid scan payload.'],422);
+        if($sessionId==='continuous'){ $result=GateLogModel::createAccess(['rfid_uid'=>$uid,'event_type'=>'rfid_scan','source_device'=>'esp32','raw_payload'=>$_POST]); $opened=$result['gate_status']==='approved'; if($opened) AccountActivityLogModel::record(null,'device','ESP32 RFID Reader','rfid_gate_opened','RFID '.$uid.' accepted and gate opened.'); json_response(['ok'=>true,'gate_opened'=>$opened,'gate_status'=>$result['gate_status'],'notes'=>$result['notes'],'log_id'=>$result['log_id']]); }
+        if($sessionId==='') json_response(['ok'=>false,'message'=>'Invalid scan session.'],422);
         $s=Database::pdo()->prepare("SELECT * FROM rfid_scan_sessions WHERE id=? AND device_id=? AND status='waiting' AND expires_at>NOW() LIMIT 1"); $s->execute([$sessionId,ESP32_DEVICE_ID]); $session=$s->fetch();
         if(!$session) json_response(['ok'=>false,'message'=>'Scan session expired or already completed.'],409);
         if(($session['purpose']??'gate')==='burn'){
@@ -628,6 +595,9 @@ class Esp32Controller
         AccountActivityLogModel::record(null, 'device', 'ESP32 RFID Reader', 'rfid_voided', 'RFID '.$uid.' voided for '.$card['email'].' (profile #'.$card['id'].')');
         json_response(['ok'=>true,'rfid_card_id'=>(int)$card['id'],'uid'=>$uid,'account'=>$card['full_name'],'role'=>$card['role'],'status'=>'void']);
     }
+
+    public function pollGateCommand(): void { $this->requireEsp32Key(); if($_SERVER['REQUEST_METHOD']!=='GET') json_response(['ok'=>false,'message'=>'Method not allowed'],405); json_response(['ok'=>true,'command'=>GateCommandModel::waitingForDevice()]); }
+    public function completeGateCommand(): void { $this->requireEsp32Key(); if($_SERVER['REQUEST_METHOD']!=='POST') json_response(['ok'=>false,'message'=>'Method not allowed'],405); $id=(int)($_POST['command_id']??0); if($id<=0||!GateCommandModel::complete($id)) json_response(['ok'=>false,'message'=>'Gate command is no longer pending.'],409); json_response(['ok'=>true,'status'=>'completed','command_id'=>$id]); }
 
     public function logAccess(): void
     {
