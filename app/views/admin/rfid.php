@@ -27,17 +27,17 @@ $roleLabel=function($role){return $role==='resident'?'Resident':ucfirst($role);}
                         </select>
                     </div>
                     <div id="residentVehicleWrap" class="d-none">
-                        <label class="form-label" for="rfidVehicle">Resident Vehicle <span class="text-danger">*</span></label>
+                        <label class="form-label" for="rfidVehicle">Account Vehicle <span class="text-danger">*</span></label>
                         <select class="form-select" id="rfidVehicle" name="vehicle_id">
                             <option value="">Select the vehicle for this RFID card...</option>
                         </select>
-                        <div class="small text-muted mt-1">Select the resident vehicle that this RFID card will authorize.</div>
+                        <div class="small text-muted mt-1">Select the vehicle that this RFID card will authorize.</div>
                     </div>
                     <div class="gh-card-soft p-3">
                         <strong>Generated Smart Gate RFID ID</strong><br><code id="generatedRfidCode">Select an account</code>
                         <div class="small text-muted mt-1">Residents: <code>res00Block-Lot-Letter-PLATE</code> · Admins: <code>adm00AccountNumber</code> · Guards: <code>grd00AccountNumber</code>.</div>
                     </div>
-                    <div class="small text-muted">The physical RC522 UID is captured automatically by the ESP32.</div>
+                    <div class="small text-muted">The physical RC522 UID is captured automatically by the ESP32. Every RFID card must be linked to an account vehicle.</div>
                     <div>
                         <label class="form-label" for="rfidNotes">Notes <span class="text-muted">(optional)</span></label>
                         <textarea class="form-control" id="rfidNotes" name="notes" rows="2" placeholder="Card issue, replacement, reason, etc."></textarea>
@@ -51,7 +51,7 @@ $roleLabel=function($role){return $role==='resident'?'Resident':ucfirst($role);}
             <div class="gh-card p-4 h-100">
                 <h5 class="mb-1">Credential Rules</h5>
                 <ul class="small text-muted mb-4 mt-3">
-                    <li>Each account has one active RFID profile.</li>
+                    <li>Each account can have up to 20 active RFID cards.</li><li>Each resident vehicle and staff vehicle can have up to 2 active RFID cards.</li><li>Resident accounts can have up to 20 vehicles; each staff account can have up to 2 vehicles.</li>
                     <li>Replacing a card retires the previous active credential.</li>
                     <li>Void credentials cannot open the gate.</li>
                     <li>Program and void actions are recorded in Admin / Guard Logs.</li>
@@ -121,19 +121,19 @@ $roleLabel=function($role){return $role==='resident'?'Resident':ucfirst($role);}
   const codes={},roles={};
   <?php foreach($accounts as $account): $house=''; if(($account['role']??'')==='resident'){ $house=preg_replace('/\s+/','', (string)($account['house_number']??'')); } $prefix=($account['role']??'')==='resident'?'res00'.$house:(($account['role']??'')==='admin'?'adm00'.(int)$account['id']:'grd00'.(int)$account['id']); ?>codes['<?=e($account['id'])?>']='<?=e($prefix)?>';roles['<?=e($account['id'])?>']='<?=e($account['role'])?>';<?php endforeach; ?>
   const updateCode=()=>{
-    const resident=roles[select.value]==='resident';
     const baseCode=codes[select.value]||'Select an account';
     const selected=vehicleSelect.options[vehicleSelect.selectedIndex];
     const plate=(selected?.dataset?.plate||'').replace(/[^A-Za-z0-9]/g,'').toUpperCase();
-    code.textContent=resident&&plate?baseCode+'-'+plate:baseCode;
+    code.textContent=plate&&baseCode!=='Select an account'?baseCode+'-'+plate:baseCode;
   };
   const loadVehicles=async()=>{
-    const resident=roles[select.value]==='resident';
-    vehicleWrap.classList.toggle('d-none',!resident);
-    vehicleSelect.required=resident;
-    vehicleSelect.disabled=!resident;
+    const selectedRole=roles[select.value]||'';
+    const hasAccount=!!select.value;
+    vehicleWrap.classList.toggle('d-none',!hasAccount);
+    vehicleSelect.required=hasAccount;
+    vehicleSelect.disabled=!hasAccount;
     vehicleSelect.innerHTML='<option value="">Select the vehicle for this RFID card...</option>';
-    if(!resident){updateCode();return;}
+    if(!hasAccount){updateCode();return;}
     vehicleSelect.disabled=true;
     vehicleSelect.innerHTML='<option value="">Loading vehicles...</option>';
     try{
@@ -151,7 +151,7 @@ $roleLabel=function($role){return $role==='resident'?'Resident':ucfirst($role);}
       if(!data.vehicles.length){
         const o=document.createElement('option');
         o.value='';
-        o.textContent='No active vehicles found for this resident';
+        o.textContent='No active vehicles found for this account';
         vehicleSelect.appendChild(o);
       }
     }catch(err){
@@ -181,7 +181,15 @@ $roleLabel=function($role){return $role==='resident'?'Resident':ucfirst($role);}
         throw new Error(d.result?.notes||d.message||'RFID burn failed.');
       };
       await poll();
-    }catch(err){button.disabled=false;button.innerHTML='<i class="bi bi-broadcast me-2"></i>START RFID BURN';showStatus('danger','Card update failed.',err.message||'The RFID card could not be updated.');}
+    }catch(err){
+      button.disabled=false;
+      button.innerHTML='<i class="bi bi-broadcast me-2"></i>START RFID BURN';
+      const message=err.message||'The RFID card could not be updated.';
+      showStatus('danger','Card update failed.',message);
+      if(message==='You have reached the limit for this vehicle!'){
+        window.setTimeout(()=>window.alert(message),50);
+      }
+    }
   });
 })();
 </script>

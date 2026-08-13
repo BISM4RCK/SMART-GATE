@@ -4,6 +4,10 @@ class HomeController
 {
     public function index(): void
     {
+        if (Auth::check()) {
+            redirect(dashboard_url());
+        }
+
         View::render('home', ['pageTitle' => 'Home']);
     }
 }
@@ -341,75 +345,211 @@ class AdminController
     }
     public function logs(): void
     {
-        require_role('admin');$filters=['event_type'=>trim($_GET['event_type']??''),'gate_status'=>trim($_GET['gate_status']??''),'actor_user_id'=>trim($_GET['actor_user_id']??''),'search'=>trim($_GET['search']??'')];
+        require_role('admin');$filters=['event_type'=>trim($_GET['event_type']??''),'gate_status'=>trim($_GET['gate_status']??''),'actor_user_id'=>trim($_GET['actor_user_id']??''),'reader'=>trim($_GET['reader']??''),'search'=>trim($_GET['search']??'')];
         View::render('admin/logs',['pageTitle'=>'Gate Logs','logs'=>GateLogModel::all($filters),'filters'=>$filters,'actors'=>array_merge(UserModel::byRole('guard'),UserModel::byRole('admin'))]);
     }
     public function rfid(): void
     {
-        require_role('admin'); $me=current_user();
-        if($_SERVER['REQUEST_METHOD']==='POST'){
-            csrf_validate(); $action=strtolower(trim($_POST['action']??''));
-            try{
-                if($action==='assign'){
-                    $userId=(int)($_POST['user_id']??0); $target=UserModel::findById($userId);
-                    if(!$target || !in_array($target['role'],['resident','guard','admin'],true) || ($target['status']??'active')!=='active') throw new RuntimeException('Select a valid active resident or staff account.');
-                    $vehicleId=(int)($_POST['vehicle_id']??0);
-                    if(($target['role']??'')==='resident'){
-                        if($vehicleId<=0) throw new RuntimeException('Select the resident vehicle that this RFID card will be assigned to.');
-                        $resident=ResidentModel::findByUserId($userId);
-                        $vehicle=$resident?VehicleModel::find($vehicleId):null;
-                        if(!$resident || !$vehicle || (int)$vehicle['resident_id']!==(int)$resident['id'] || ($vehicle['status']??'active')!=='active') throw new RuntimeException('Select a valid active vehicle belonging to the selected resident.');
-                    } else { $vehicleId=null; }
-                    $vehicle=$vehicleId ? VehicleModel::find($vehicleId) : null;
-                    $credential=RfidCardModel::profileCodeForUser($target,$vehicle);
-                    $sessionId=RfidScanSessionModel::create(ESP32_DEVICE_ID,(int)$me['id'],'admin','burn',$userId,trim($_POST['notes']??''),$vehicleId);
-                    json_response(['ok'=>true,'session_id'=>$sessionId,'credential_code'=>$credential,'message'=>'Waiting for RFID card...']);
-                } elseif($action==='void'){
-                    $cardId=(int)($_POST['rfid_card_id']??0); $card=RfidCardModel::all(['status'=>'active','search'=>'']); $target=null; foreach($card as $row){if((int)$row['id']===$cardId){$target=$row;break;}}
-                    if(!$target) throw new RuntimeException('Active RFID profile not found.');
-                    if(RfidCardModel::void($cardId,(int)$me['id'],trim($_POST['notes']??''))){activity_log('rfid_voided','RFID '.($target['uid']??'').' voided for '.$target['email'].'; physical card must be rewritten using compatible RFID hardware.');flash_set('success','RFID profile voided. It can no longer validate at the gate.');} else throw new RuntimeException('RFID profile could not be voided.');
+        require_role('admin');
+        $me = current_user();
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            csrf_validate();
+            $action = strtolower(trim($_POST['action'] ?? ''));
+
+            try {
+                if ($action === 'assign') {
+                    $userId = (int)($_POST['user_id'] ?? 0);
+                    $target = UserModel::findById($userId);
+
+                    if (
+                        !$target ||
+                        !in_array($target['role'], ['resident', 'guard', 'admin'], true) ||
+                        ($target['status'] ?? 'active') !== 'active'
+                    ) {
+                        throw new RuntimeException('Select a valid active resident or staff account.');
+                    }
+
+                    $vehicleId = null;
+                    $staffVehicleId = null;
+                    $vehicle = null;
+
+                    if (($target['role'] ?? '') === 'resident') {
+                        $vehicleId = (int)($_POST['vehicle_id'] ?? 0);
+
+                        if ($vehicleId <= 0) {
+                            throw new RuntimeException('Select the resident vehicle that this RFID card will be assigned to.');
+                        }
+
+                        $resident = ResidentModel::findByUserId($userId);
+                        $vehicle = $resident ? VehicleModel::find($vehicleId) : null;
+
+                        if (
+                            !$resident ||
+                            !$vehicle ||
+                            (int)$vehicle['resident_id'] !== (int)$resident['id'] ||
+                            ($vehicle['status'] ?? 'active') !== 'active'
+                        ) {
+                            throw new RuntimeException('Select a valid active vehicle belonging to the selected resident.');
+                        }
+                    } else {
+                        $staffVehicleId = (int)($_POST['vehicle_id'] ?? 0);
+
+                        if ($staffVehicleId <= 0) {
+                            throw new RuntimeException('Select the staff vehicle that this RFID card will be assigned to.');
+                        }
+
+                        $vehicle = UserVehicleModel::find($staffVehicleId);
+
+                        if (
+                            !$vehicle ||
+                            (int)$vehicle['user_id'] !== $userId
+                        ) {
+                            throw new RuntimeException('Select a valid active vehicle belonging to the selected staff account.');
+                        }
+                    }
+
+                    $credential = RfidCardModel::profileCodeForUser($target, $vehicle);
+
+                    $sessionId = RfidScanSessionModel::create(
+                        ESP32_DEVICE_ID,
+                        (int)$me['id'],
+                        'admin',
+                        'burn',
+                        $userId,
+                        trim($_POST['notes'] ?? ''),
+                        $vehicleId,
+                        $staffVehicleId
+                    );
+
+                    json_response([
+                        'ok' => true,
+                        'session_id' => $sessionId,
+                        'credential_code' => $credential,
+                        'message' => 'Waiting for RFID card...',
+                    ]);
+                } elseif ($action === 'void') {
+                    $cardId = (int)($_POST['rfid_card_id'] ?? 0);
+                    $cards = RfidCardModel::all(['status' => 'active', 'search' => '']);
+                    $target = null;
+
+                    foreach ($cards as $row) {
+                        if ((int)$row['id'] === $cardId) {
+                            $target = $row;
+                            break;
+                        }
+                    }
+
+                    if (!$target) {
+                        throw new RuntimeException('Active RFID profile not found.');
+                    }
+
+                    if (RfidCardModel::void($cardId, (int)$me['id'], trim($_POST['notes'] ?? ''))) {
+                        activity_log(
+                            'rfid_voided',
+                            'RFID '.($target['uid'] ?? '').' voided for '.$target['email'].'; physical card must be rewritten using compatible RFID hardware.'
+                        );
+                        flash_set('success', 'RFID profile voided. It can no longer validate at the gate.');
+                    } else {
+                        throw new RuntimeException('RFID profile could not be voided.');
+                    }
                 }
-            }catch(Throwable $e){flash_set('danger',$e->getMessage());}
+            } catch (Throwable $e) {
+                flash_set('danger', $e->getMessage());
+            }
+
             redirect('admin/rfid.php');
         }
-        $filters=['account_type'=>strtolower(trim($_GET['account_type']??'')),'status'=>strtolower(trim($_GET['status']??'')),'search'=>trim($_GET['search']??'')];
-        if(!in_array($filters['account_type'],['resident','staff'],true))$filters['account_type']='';
-        if(!in_array($filters['status'],['active','void'],true))$filters['status']='';
-        $accounts=UserModel::all();
-        $residentVehicles=[];
-        foreach($accounts as $account){
-            if(($account['role']??'')==='resident'){
-                $resident=ResidentModel::findByUserId((int)$account['id']);
-                $residentVehicles[(int)$account['id']]=$resident?VehicleModel::forResident((int)$resident['id']):[];
-            }
+
+        $filters = [
+            'account_type' => strtolower(trim($_GET['account_type'] ?? '')),
+            'status' => strtolower(trim($_GET['status'] ?? '')),
+            'search' => trim($_GET['search'] ?? ''),
+        ];
+
+        if (!in_array($filters['account_type'], ['resident', 'staff'], true)) {
+            $filters['account_type'] = '';
         }
-        $cards=RfidCardModel::all($filters);
-        View::render('admin/rfid',['pageTitle'=>'RFID Management','cards'=>$cards,'accounts'=>$accounts,'filters'=>$filters,'residentVehicles'=>$residentVehicles]);
+
+        if (!in_array($filters['status'], ['active', 'void'], true)) {
+            $filters['status'] = '';
+        }
+
+        $accounts = UserModel::all();
+        $cards = RfidCardModel::all($filters);
+
+        View::render('admin/rfid', [
+            'pageTitle' => 'RFID Management',
+            'cards' => $cards,
+            'accounts' => $accounts,
+            'filters' => $filters,
+        ]);
     }
 
     public function rfidVehicles(): void
     {
         require_role('admin');
-        $userId=(int)($_GET['user_id']??0);
-        if($userId<=0){json_response(['ok'=>false,'message'=>'Select a resident account first.','vehicles'=>[]],422);return;}
-        $target=UserModel::findById($userId);
-        if(!$target || ($target['role']??'')!=='resident' || ($target['status']??'active')!=='active'){
-            json_response(['ok'=>false,'message'=>'The selected account is not an active resident.','vehicles'=>[]],422);
+
+        $userId = (int)($_GET['user_id'] ?? 0);
+
+        if ($userId <= 0) {
+            json_response([
+                'ok' => false,
+                'message' => 'Select an account first.',
+                'vehicles' => [],
+            ], 422);
             return;
         }
-        $resident=ResidentModel::findByUserId($userId);
-        if(!$resident){json_response(['ok'=>false,'message'=>'No resident profile was found for this account.','vehicles'=>[]],404);return;}
-        $vehicles=VehicleModel::forResident((int)$resident['id']);
-        $vehicles=array_values(array_map(static function(array $vehicle): array {
-            return [
-                'id'=>(int)$vehicle['id'],
-                'plate_number'=>(string)$vehicle['plate_number'],
-                'vehicle_type'=>(string)$vehicle['vehicle_type'],
-                'color'=>(string)($vehicle['color']??'N/A'),
-                'status'=>(string)($vehicle['status']??'active'),
-            ];
-        },array_filter($vehicles,static fn(array $vehicle): bool => ($vehicle['status']??'active')==='active')));
-        json_response(['ok'=>true,'vehicles'=>$vehicles]);
+
+        $target = UserModel::findById($userId);
+
+        if (
+            !$target ||
+            !in_array(($target['role'] ?? ''), ['resident', 'guard', 'admin'], true) ||
+            ($target['status'] ?? 'active') !== 'active'
+        ) {
+            json_response([
+                'ok' => false,
+                'message' => 'The selected account is not an active resident or staff account.',
+                'vehicles' => [],
+            ], 422);
+            return;
+        }
+
+        if (($target['role'] ?? '') === 'resident') {
+            $resident = ResidentModel::findByUserId($userId);
+
+            if (!$resident) {
+                json_response([
+                    'ok' => false,
+                    'message' => 'No resident profile was found for this account.',
+                    'vehicles' => [],
+                ], 404);
+                return;
+            }
+
+            $vehicles = VehicleModel::forResident((int)$resident['id']);
+        } else {
+            $vehicles = UserVehicleModel::allStaff(['owner_id' => $userId]);
+        }
+
+        $vehicles = array_values(array_map(
+            static function (array $vehicle): array {
+                return [
+                    'id' => (int)$vehicle['id'],
+                    'plate_number' => (string)$vehicle['plate_number'],
+                    'vehicle_type' => (string)($vehicle['vehicle_type'] ?? 'other'),
+                    'color' => (string)($vehicle['color'] ?? 'N/A'),
+                    'status' => (string)($vehicle['status'] ?? 'active'),
+                ];
+            },
+            array_filter(
+                $vehicles,
+                static fn(array $vehicle): bool => ($vehicle['status'] ?? 'active') === 'active'
+            )
+        ));
+
+        json_response(['ok' => true, 'vehicles' => $vehicles]);
     }
 
     public function liveRfid(): void { require_role('admin'); $after=(int)($_GET['after_id']??0); json_response(['ok'=>true,'log'=>GateLogModel::latestRfidAfter($after)]); }
@@ -434,9 +574,46 @@ class AdminController
                     elseif($role==='guard'){if(trim($_POST['guard_code']??'')==='')throw new RuntimeException('Guard ID is required.');$stmt=$pdo->prepare('INSERT INTO guards (user_id,guard_code,shift_name,contact_number) VALUES (?,?,?,?)');$stmt->execute([$userId,trim($_POST['guard_code']),trim($_POST['shift_name']??''),trim($_POST['contact_number_guard']??'')]);}
                     else{if(trim($_POST['admin_code']??'')==='')throw new RuntimeException('Admin ID is required.');$stmt=$pdo->prepare('INSERT INTO admins (user_id,admin_code) VALUES (?,?)');$stmt->execute([$userId,trim($_POST['admin_code'])]);}
                     $pdo->commit();activity_log('account_created',ucfirst($role).' account '.$email);flash_set('success',ucfirst($role).' account created.');
-                }elseif($action==='delete_user'){$userId=(int)($_POST['user_id']??0);if($userId===(int)$me['id'])throw new RuntimeException('You cannot remove your own admin account.');$target=UserModel::findById($userId);if(!$target)throw new RuntimeException('User not found.');UserModel::delete($userId);activity_log('account_deleted','Account '.$target['email']);flash_set('success','User removed.');}
-                elseif($action==='change_password'){$userId=(int)($_POST['user_id']??0);$password=(string)($_POST['new_password']??'');$target=UserModel::findById($userId);if(!$target)throw new RuntimeException('User not found.');if(strlen($password)<6)throw new RuntimeException('Password must be at least 6 characters.');if(UserModel::updatePassword($userId,$password)){activity_log('account_password_changed','Password changed for '.$target['email']);flash_set('success','Password changed for '.($target['full_name']??$target['email']).'.');}else throw new RuntimeException('Password could not be changed.');}
-                elseif($action==='change_username'){$userId=(int)($_POST['user_id']??0);$username=strtolower(trim($_POST['new_username']??''));$target=UserModel::findById($userId);if(!$target)throw new RuntimeException('User not found.');if(!filter_var($username,FILTER_VALIDATE_EMAIL))throw new RuntimeException('Username must be a valid email address.');$existing=UserModel::findByEmail($username);if($existing&& (int)$existing['id']!==$userId)throw new RuntimeException('That username is already in use.');if(UserModel::updateUsername($userId,$username)){activity_log('account_username_changed','Username changed for '.$target['email'].' to '.$username);flash_set('success','Username changed for '.($target['full_name']??$target['email']).'.');}else throw new RuntimeException('Username could not be changed.');}
+                }elseif($action==='delete_user'){
+                    $userId=(int)($_POST['user_id']??0);
+                    if($userId===(int)$me['id'])throw new RuntimeException('You cannot remove your own admin account.');
+                    $target=UserModel::findById($userId);
+                    if(!$target)throw new RuntimeException('User not found.');
+                    if(!empty($target['is_super_admin']))throw new RuntimeException('The KUN3H0 super admin account cannot be removed.');
+                    UserModel::delete($userId);
+                    activity_log('account_deleted','Account '.$target['email']);
+                    flash_set('success','User removed.');
+                }
+                elseif($action==='change_password'){
+                    $userId=(int)($_POST['user_id']??0);
+                    $password=(string)($_POST['new_password']??'');
+                    $target=UserModel::findById($userId);
+                    if(!$target)throw new RuntimeException('User not found.');
+                    if(!empty($target['is_super_admin']) && !UserModel::isSuperAdmin((int)$me['id'])){
+                        throw new RuntimeException('Only the KUN3H0 super admin account can change its password.');
+                    }
+                    if(strlen($password)<6)throw new RuntimeException('Password must be at least 6 characters.');
+                    if(UserModel::updatePassword($userId,$password)){
+                        activity_log('account_password_changed','Password changed for '.$target['email']);
+                        flash_set('success','Password changed for '.($target['full_name']??$target['email']).'.');
+                    }else throw new RuntimeException('Password could not be changed.');
+                }
+                elseif($action==='change_username'){
+                    $userId=(int)($_POST['user_id']??0);
+                    $username=strtolower(trim($_POST['new_username']??''));
+                    $target=UserModel::findById($userId);
+                    if(!$target)throw new RuntimeException('User not found.');
+                    if(!empty($target['is_super_admin']) && !UserModel::isSuperAdmin((int)$me['id'])){
+                        throw new RuntimeException('Only the KUN3H0 super admin account can change its username.');
+                    }
+                    if(!filter_var($username,FILTER_VALIDATE_EMAIL))throw new RuntimeException('Username must be a valid email address.');
+                    $existing=UserModel::findByEmail($username);
+                    if($existing&& (int)$existing['id']!==$userId)throw new RuntimeException('That username is already in use.');
+                    if(UserModel::updateUsername($userId,$username)){
+                        activity_log('account_username_changed','Username changed for '.$target['email'].' to '.$username);
+                        flash_set('success','Username changed for '.($target['full_name']??$target['email']).'.');
+                    }else throw new RuntimeException('Username could not be changed.');
+                }
             }catch(Throwable $e){if(Database::pdo()->inTransaction())Database::pdo()->rollBack();flash_set('danger',$e->getMessage());}
             redirect('admin/users.php');
         }
@@ -520,8 +697,13 @@ class Esp32Controller
         $payload=['ok'=>true,'scan_requested'=>true,'continuous'=>!$session,'session_id'=>$session['id']??null,'purpose'=>$session['purpose']??'continuous'];
         if($session && ($session['purpose']??'gate')==='burn'){
             $target=UserModel::findById((int)$session['target_user_id']);
-            $vehicle=!empty($session['target_vehicle_id'])?VehicleModel::find((int)$session['target_vehicle_id']):null;
-            $payload['credential_code']=$target?RfidCardModel::profileCodeForUser($target,$vehicle):null;
+            $vehicle = null;
+            if ($session && !empty($session['target_vehicle_id'])) {
+                $vehicle = VehicleModel::find((int)$session['target_vehicle_id']);
+            } elseif ($session && !empty($session['target_staff_vehicle_id'])) {
+                $vehicle = UserVehicleModel::find((int)$session['target_staff_vehicle_id']);
+            }
+            $payload['credential_code'] = $target ? RfidCardModel::profileCodeForUser($target, $vehicle) : null;
         }
         json_response($payload);
     }
@@ -530,36 +712,134 @@ class Esp32Controller
     {
         $this->requireEsp32Key();
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') json_response(['ok'=>false,'message'=>'Method not allowed'],405);
-        $sessionId=trim((string)($_POST['session_id']??'')); $uid=strtoupper(trim((string)($_POST['rfid_uid']??'')));
+        $sessionId=trim((string)($_POST['session_id']??'')); $uid=strtoupper(trim((string)($_POST['rfid_uid']??''))); $reader=in_array(strtolower(trim((string)($_POST['reader']??''))),['entry','exit'],true)?strtolower(trim((string)$_POST['reader'])):'entry';
         if(!preg_match('/^[a-f0-9:.-]{4,100}$/i',$uid)) json_response(['ok'=>false,'message'=>'Invalid scan payload.'],422);
-        if($sessionId==='continuous'){ $result=GateLogModel::createAccess(['rfid_uid'=>$uid,'event_type'=>'rfid_scan','source_device'=>'esp32','raw_payload'=>$_POST]); $opened=$result['gate_status']==='approved'; if($opened) AccountActivityLogModel::record(null,'device','ESP32 RFID Reader','rfid_gate_opened','RFID '.$uid.' accepted and gate opened.'); json_response(['ok'=>true,'gate_opened'=>$opened,'gate_status'=>$result['gate_status'],'notes'=>$result['notes'],'log_id'=>$result['log_id']]); }
+        if($sessionId==='continuous'){ $result=GateLogModel::createAccess(['rfid_uid'=>$uid,'event_type'=>'rfid_scan','source_device'=>'esp32-'.$reader,'reader'=>$reader,'raw_payload'=>$_POST]); $opened=$result['gate_status']==='approved'; if($opened) AccountActivityLogModel::record(null,'device','ESP32 RFID Reader','rfid_gate_opened','RFID '.$uid.' accepted and gate opened.'); json_response(['ok'=>true,'gate_opened'=>$opened,'gate_status'=>$result['gate_status'],'notes'=>$result['notes'],'log_id'=>$result['log_id']]); }
         if($sessionId==='') json_response(['ok'=>false,'message'=>'Invalid scan session.'],422);
         $s=Database::pdo()->prepare("SELECT * FROM rfid_scan_sessions WHERE id=? AND device_id=? AND status='waiting' AND expires_at>NOW() LIMIT 1"); $s->execute([$sessionId,ESP32_DEVICE_ID]); $session=$s->fetch();
         if(!$session) json_response(['ok'=>false,'message'=>'Scan session expired or already completed.'],409);
-        if(($session['purpose']??'gate')==='burn'){
-            $target=UserModel::findById((int)$session['target_user_id']);
-            if(!$target || !in_array($target['role'],['resident','guard','admin'],true) || ($target['status']??'active')!=='active'){
-                RfidScanSessionModel::finish($sessionId,'error',['notes'=>'Target RFID account is invalid or inactive.']);
-                json_response(['ok'=>false,'message'=>'Target RFID account is invalid or inactive.'],422);
+        if (($session['purpose'] ?? 'gate') === 'burn') {
+            $target = UserModel::findById((int)$session['target_user_id']);
+
+            if (
+                !$target ||
+                !in_array($target['role'], ['resident', 'guard', 'admin'], true) ||
+                ($target['status'] ?? 'active') !== 'active'
+            ) {
+                RfidScanSessionModel::finish(
+                    $sessionId,
+                    'error',
+                    ['notes' => 'Target RFID account is invalid or inactive.']
+                );
+                json_response([
+                    'ok' => false,
+                    'message' => 'Target RFID account is invalid or inactive.',
+                ], 422);
             }
-            try{
-                $vehicleId=!empty($session['target_vehicle_id'])?(int)$session['target_vehicle_id']:null;
-                $vehicle=$vehicleId?VehicleModel::find($vehicleId):null;
-                $credential=RfidCardModel::profileCodeForUser($target,$vehicle);
-                if(($target['role']??'')==='resident'){
-                    if(!$vehicleId) throw new RuntimeException('A resident RFID card must have a resident vehicle selected.');
-                    $resident=ResidentModel::findByUserId((int)$target['id']); $vehicle=$resident?VehicleModel::find($vehicleId):$vehicle;
-                    if(!$resident || !$vehicle || (int)$vehicle['resident_id']!==(int)$resident['id'] || ($vehicle['status']??'active')!=='active') throw new RuntimeException('The selected resident vehicle is no longer valid.');
+
+            try {
+                $vehicleId = !empty($session['target_vehicle_id'])
+                    ? (int)$session['target_vehicle_id']
+                    : null;
+                $staffVehicleId = !empty($session['target_staff_vehicle_id'])
+                    ? (int)$session['target_staff_vehicle_id']
+                    : null;
+
+                $vehicle = $vehicleId
+                    ? VehicleModel::find($vehicleId)
+                    : ($staffVehicleId ? UserVehicleModel::find($staffVehicleId) : null);
+
+                $credential = RfidCardModel::profileCodeForUser($target, $vehicle);
+
+                if (($target['role'] ?? '') === 'resident') {
+                    if (!$vehicleId) {
+                        throw new RuntimeException('A resident RFID card must have a resident vehicle selected.');
+                    }
+
+                    $resident = ResidentModel::findByUserId((int)$target['id']);
+                    $residentVehicle = $resident ? VehicleModel::find($vehicleId) : null;
+
+                    if (
+                        !$resident ||
+                        !$residentVehicle ||
+                        (int)$residentVehicle['resident_id'] !== (int)$resident['id'] ||
+                        ($residentVehicle['status'] ?? 'active') !== 'active'
+                    ) {
+                        throw new RuntimeException('The selected resident vehicle is no longer valid.');
+                    }
+
+                    $vehicle = $residentVehicle;
+                } else {
+                    if (!$staffVehicleId) {
+                        throw new RuntimeException('A staff RFID card must have a staff vehicle selected.');
+                    }
+
+                    if (
+                        !$vehicle ||
+                        (int)$vehicle['user_id'] !== (int)$target['id']
+                    ) {
+                        throw new RuntimeException('The selected staff vehicle is no longer valid.');
+                    }
                 }
-                $id=RfidCardModel::assign((int)$target['id'],$uid,null,'ESP32 RC522 RFID burn', $credential,$vehicleId);
-                $vehicleNote=''; if($vehicleId){$vehicle=VehicleModel::find($vehicleId);$vehicleNote=' / vehicle '.($vehicle['plate_number']??$vehicleId);}
-                AccountActivityLogModel::record((int)$session['actor_user_id'],$session['actor_role'],null,'rfid_programmed','RFID '.$uid.' assigned to '.$target['email'].' as '.$credential.' (profile #'.$id.')'.$vehicleNote);
-                $result=['gate_opened'=>false,'rfid_uid'=>$uid,'rfid_card_id'=>$id,'credential_code'=>$credential,'account'=>$target['full_name'],'role'=>$target['role'],'vehicle_id'=>$vehicleId,'vehicle_plate'=>$vehicleId?($vehicle['plate_number']??null):null,'notes'=>'Card updated successfully. RFID profile programmed and assigned.'];
-                RfidScanSessionModel::finish($sessionId,'approved',$result);
-                json_response(['ok'=>true,'burn'=>true,'write_profile'=>true,'credential_code'=>$credential,'result'=>$result]);
-            }catch(Throwable $e){RfidScanSessionModel::finish($sessionId,'error',['notes'=>$e->getMessage()]);json_response(['ok'=>false,'message'=>$e->getMessage()],409);}
+
+                $id = RfidCardModel::assign(
+                    (int)$target['id'],
+                    $uid,
+                    null,
+                    'ESP32 RC522 RFID burn',
+                    $credential,
+                    $vehicleId,
+                    $staffVehicleId
+                );
+
+                $vehicleNote = $vehicle
+                    ? ' / vehicle '.($vehicle['plate_number'] ?? $vehicle['id'])
+                    : '';
+
+                AccountActivityLogModel::record(
+                    (int)$session['actor_user_id'],
+                    $session['actor_role'],
+                    null,
+                    'rfid_programmed',
+                    'RFID '.$uid.' assigned to '.$target['email'].' as '.$credential.
+                    ' (profile #'.$id.')'.$vehicleNote
+                );
+
+                $result = [
+                    'gate_opened' => false,
+                    'rfid_uid' => $uid,
+                    'rfid_card_id' => $id,
+                    'credential_code' => $credential,
+                    'account' => $target['full_name'],
+                    'role' => $target['role'],
+                    'vehicle_id' => $vehicleId ?: $staffVehicleId,
+                    'vehicle_plate' => $vehicle['plate_number'] ?? null,
+                    'notes' => 'Card updated successfully. RFID profile programmed and assigned.',
+                ];
+
+                RfidScanSessionModel::finish($sessionId, 'approved', $result);
+
+                json_response([
+                    'ok' => true,
+                    'burn' => true,
+                    'write_profile' => true,
+                    'credential_code' => $credential,
+                    'result' => $result,
+                ]);
+            } catch (Throwable $e) {
+                RfidScanSessionModel::finish(
+                    $sessionId,
+                    'error',
+                    ['notes' => $e->getMessage()]
+                );
+                json_response([
+                    'ok' => false,
+                    'message' => $e->getMessage(),
+                ], 409);
+            }
         }
-        $result=GateLogModel::createAccess(['rfid_uid'=>$uid,'event_type'=>'rfid_scan','source_device'=>'esp32-'.ESP32_DEVICE_ID,'actor_user_id'=>(int)$session['actor_user_id'],'actor_role'=>$session['actor_role'],'raw_payload'=>['session_id'=>$sessionId,'rfid_uid'=>$uid,'device_id'=>ESP32_DEVICE_ID]]);
+
+        $result=GateLogModel::createAccess(['rfid_uid'=>$uid,'event_type'=>'rfid_scan','source_device'=>'esp32-'.ESP32_DEVICE_ID,'reader'=>$reader,'actor_user_id'=>(int)$session['actor_user_id'],'actor_role'=>$session['actor_role'],'raw_payload'=>['session_id'=>$sessionId,'rfid_uid'=>$uid,'device_id'=>ESP32_DEVICE_ID]]);
         $approved=in_array($result['gate_status'],['approved','manual_override'],true);
         RfidScanSessionModel::finish($sessionId,$approved?'approved':'error',$result+['rfid_uid'=>$uid]);
         AccountActivityLogModel::record((int)$session['actor_user_id'],$session['actor_role'],null,'rfid_gate_scan',$result['notes']);
@@ -572,11 +852,21 @@ class Esp32Controller
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') json_response(['ok'=>false,'message'=>'Method not allowed'],405);
         $uid = strtoupper(trim((string)($_POST['rfid_uid'] ?? '')));
         $userId = (int)($_POST['user_id'] ?? 0);
+        $vehicleId = (int)($_POST['vehicle_id'] ?? 0);
+        $staffVehicleId = (int)($_POST['staff_vehicle_id'] ?? 0);
         if ($uid === '' || !preg_match('/^[A-F0-9:._-]{4,100}$/i', $uid)) json_response(['ok'=>false,'message'=>'Invalid RFID UID.'],422);
         $target = UserModel::findById($userId);
         if (!$target || !in_array($target['role'], ['resident','guard','admin'], true) || ($target['status'] ?? 'active') !== 'active') json_response(['ok'=>false,'message'=>'Invalid or inactive account.'],422);
         try {
-            $id = RfidCardModel::assign($userId, $uid, null, 'ESP32 RC522 programming');
+            $id = RfidCardModel::assign(
+                $userId,
+                $uid,
+                null,
+                'ESP32 RC522 programming',
+                null,
+                $vehicleId ?: null,
+                $staffVehicleId ?: null
+            );
             AccountActivityLogModel::record(null, 'device', 'ESP32 RFID Reader', 'rfid_programmed', 'RFID '.$uid.' assigned to '.$target['email'].' (profile #'.$id.')');
             json_response(['ok'=>true,'rfid_card_id'=>$id,'uid'=>$uid,'user_id'=>$userId,'account'=>$target['full_name'],'role'=>$target['role']]);
         } catch (Throwable $e) { json_response(['ok'=>false,'message'=>$e->getMessage()],409); }

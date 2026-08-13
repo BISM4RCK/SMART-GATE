@@ -8,7 +8,7 @@ include app_path('views/layouts/header.php');
         <div class="gh-landing-square-grid">
             <a class="btn gh-primary gh-square-btn ui-landing_login" href="<?= e(url('login.php')) ?>">Login</a>
             <a class="btn gh-gold gh-square-btn ui-landing_visitor" href="<?= e(url('visitor/register.php')) ?>">Visitor</a>
-            <a class="btn btn-outline-dark gh-square-btn" href="<?= e(url('visitor/id.php')) ?>">Visitor ID</a>
+            <a class="btn btn-outline-dark gh-square-btn" href="<?= e(url('visitor/id.php')) ?>">Check Status (for Visitors)</a>
         </div>
     </div>
 </div>
