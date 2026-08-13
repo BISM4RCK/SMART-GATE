@@ -52,3 +52,9 @@ Accepted fields:
 <!-- BISM4RCK/KUN3H0 2026 -->
 
 <!-- BISM4RCK-KUN3H0 2026 -->
+
+## RFID UID assignment model
+
+RFID assignment records the card UID and binds it server-side to the selected
+account and vehicle. The ESP32 does not rewrite card memory, so the assignment
+flow does not use MIFARE Classic Key A/Key B or block 4/5/8/9.

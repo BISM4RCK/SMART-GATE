@@ -35,7 +35,7 @@ $roleLabel=function($role){return $role==='resident'?'Resident':ucfirst($role);}
                     </div>
                     <div class="gh-card-soft p-3">
                         <strong>Generated Smart Gate RFID ID</strong><br><code id="generatedRfidCode">Select an account</code>
-                        <div class="small text-muted mt-1">Residents: <code>res00Block-Lot-Letter-PLATE</code> · Admins: <code>adm00AccountNumber</code> · Guards: <code>grd00AccountNumber</code>.</div>
+                        <div class="small text-muted mt-1">Residents: <code>res00Block-Lot-Letter-PLATE</code> · Admins: <code>adm-AdminNumber-PLATE</code> · Guards: <code>grd-GuardNumber-PLATE</code>.</div>
                     </div>
                     <div class="small text-muted">The physical RC522 UID is captured automatically by the ESP32. Every RFID card must be linked to an account vehicle.</div>
                     <div>
@@ -51,7 +51,7 @@ $roleLabel=function($role){return $role==='resident'?'Resident':ucfirst($role);}
             <div class="gh-card p-4 h-100">
                 <h5 class="mb-1">Credential Rules</h5>
                 <ul class="small text-muted mb-4 mt-3">
-                    <li>Each account can have up to 20 active RFID cards.</li><li>Each resident vehicle and staff vehicle can have up to 2 active RFID cards.</li><li>Resident accounts can have up to 20 vehicles; each staff account can have up to 2 vehicles.</li>
+                    <li>Each account can have up to 20 active RFID cards.</li><li>Each resident vehicle and staff vehicle can have up to 2 active RFID cards.</li><li>Resident accounts can have up to 10 vehicles; each staff account can have up to 2 vehicles.</li>
                     <li>Replacing a card retires the previous active credential.</li>
                     <li>Void credentials cannot open the gate.</li>
                     <li>Program and void actions are recorded in Admin / Guard Logs.</li>
@@ -119,7 +119,7 @@ $roleLabel=function($role){return $role==='resident'?'Resident':ucfirst($role);}
   const select=document.getElementById('rfidAccount'),vehicleSelect=document.getElementById('rfidVehicle'),vehicleWrap=document.getElementById('residentVehicleWrap'),code=document.getElementById('generatedRfidCode'),form=document.getElementById('rfidBurnForm'),button=document.getElementById('startRfidBurn'),statusBox=document.getElementById('rfidBurnStatus');
   if(!select||!code||!form||!button||!statusBox)return;
   const codes={},roles={};
-  <?php foreach($accounts as $account): $house=''; if(($account['role']??'')==='resident'){ $house=preg_replace('/\s+/','', (string)($account['house_number']??'')); } $prefix=($account['role']??'')==='resident'?'res00'.$house:(($account['role']??'')==='admin'?'adm00'.(int)$account['id']:'grd00'.(int)$account['id']); ?>codes['<?=e($account['id'])?>']='<?=e($prefix)?>';roles['<?=e($account['id'])?>']='<?=e($account['role'])?>';<?php endforeach; ?>
+  <?php foreach($accounts as $account): $house=''; if(($account['role']??'')==='resident'){ $house=preg_replace('/\s+/','', (string)($account['house_number']??'')); } $prefix=($account['role']??'')==='resident'?'res00'.$house:(($account['role']??'')==='admin'?'adm-'.(int)$account['id']:'grd-'.(int)$account['id']); ?>codes['<?=e($account['id'])?>']='<?=e($prefix)?>';roles['<?=e($account['id'])?>']='<?=e($account['role'])?>';<?php endforeach; ?>
   const updateCode=()=>{
     const baseCode=codes[select.value]||'Select an account';
     const selected=vehicleSelect.options[vehicleSelect.selectedIndex];
@@ -176,8 +176,15 @@ $roleLabel=function($role){return $role==='resident'?'Resident':ucfirst($role);}
       const poll=async()=>{
         const r=await fetch('<?=e(url('admin/rfid-result.php'))?>?session_id='+encodeURIComponent(data.session_id),{headers:{'Accept':'application/json'},cache:'no-store'});
         const d=await r.json(); if(!d.ok)throw new Error(d.message||'Unable to check RFID burn.');
-        if(d.status==='waiting'){showStatus('info','Waiting for card.','Present the RFID card on the RC522 reader.');setTimeout(poll,1000);return;}
+        if(d.status==='waiting'){showStatus('info','Waiting for card.','Present the RFID card on the RC522 reader.');setTimeout(poll,500);return;}
         if(d.status==='approved'){button.disabled=false;button.innerHTML='<i class="bi bi-check-circle me-2"></i>CARD UPDATED';showStatus('success','Card updated successfully.','RFID '+(d.result?.credential_code||data.credential_code)+' is now assigned to '+(d.result?.account||'the selected account')+'. The ESP32 confirmed the card write.',true);return;}
+        if(d.status==='error'){
+          button.disabled=false;
+          button.innerHTML='<i class="bi bi-broadcast me-2"></i>START RFID BURN';
+          const failedMessage=d.result?.burn_failed_message||d.result?.message||d.message||'RFID card didn’t burn, try again!';
+          showStatus('danger','RFID card didn’t burn, try again!',failedMessage,true);
+          return;
+        }
         throw new Error(d.result?.notes||d.message||'RFID burn failed.');
       };
       await poll();
