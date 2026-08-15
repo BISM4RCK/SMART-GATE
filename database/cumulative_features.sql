@@ -271,7 +271,7 @@ ALTER TABLE rfid_cards ADD COLUMN IF NOT EXISTS vehicle_id BIGINT UNSIGNED NULL;
 
 ALTER TABLE rfid_scan_sessions ADD COLUMN IF NOT EXISTS target_vehicle_id BIGINT UNSIGNED NULL;
 
--- RFID vehicle capacity, protected super admin, and expanded demo data.
+-- RFID vehicle capacity, protected super admin, expanded demo data, and production-scale account capacity.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_super_admin TINYINT(1) NOT NULL DEFAULT 0;
 
 ALTER TABLE rfid_cards ADD COLUMN IF NOT EXISTS staff_vehicle_id BIGINT UNSIGNED NULL AFTER vehicle_id;
