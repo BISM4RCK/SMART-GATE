@@ -253,7 +253,7 @@ class VehicleModel
     {
         $countStmt=Database::pdo()->prepare("SELECT COUNT(*) FROM vehicles WHERE resident_id=? AND status='active'");
         $countStmt->execute([$residentId]);
-        if((int)$countStmt->fetchColumn() >= 20) throw new RuntimeException('Each resident account can have up to 20 active vehicles.');
+        if((int)$countStmt->fetchColumn() >= 10) throw new RuntimeException('Each resident account can have up to 10 active vehicles.');
         $color=trim(preg_replace('/\\s+/',' ',$color));
         $color=$color===''?'N/A':mb_convert_case($color, MB_CASE_TITLE, 'UTF-8');
         $stmt = Database::pdo()->prepare("INSERT INTO vehicles (resident_id, plate_number, vehicle_type, color, status) VALUES (?, ?, ?, ?, 'active')");
@@ -447,8 +447,10 @@ class RfidCardModel
         }
 
         $prefix = $role === 'admin' ? 'adm' : 'grd';
+        $accountNumber = (int)$user['id'];
+        $plate = preg_replace('/[^A-Za-z0-9]+/', '', strtoupper((string)($vehicle['plate_number'] ?? '')));
 
-        return $prefix.'00'.(int)$user['id'];
+        return $prefix.'-'.$accountNumber.($plate !== '' ? '-'.$plate : '');
     }
 
     public static function assign(

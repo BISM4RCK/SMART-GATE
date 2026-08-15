@@ -713,11 +713,38 @@ class Esp32Controller
         $this->requireEsp32Key();
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') json_response(['ok'=>false,'message'=>'Method not allowed'],405);
         $sessionId=trim((string)($_POST['session_id']??'')); $uid=strtoupper(trim((string)($_POST['rfid_uid']??''))); $reader=in_array(strtolower(trim((string)($_POST['reader']??''))),['entry','exit'],true)?strtolower(trim((string)$_POST['reader'])):'entry';
-        if(!preg_match('/^[a-f0-9:.-]{4,100}$/i',$uid)) json_response(['ok'=>false,'message'=>'Invalid scan payload.'],422);
+        if (($sessionId !== 'continuous') && !empty($_POST['burn_failed'])) {
+            $uid = $uid !== '' ? $uid : '00000000';
+        } elseif(!preg_match('/^[a-f0-9:.-]{4,100}$/i',$uid)) {
+            json_response(['ok'=>false,'message'=>'Invalid scan payload.'],422);
+        }
         if($sessionId==='continuous'){ $result=GateLogModel::createAccess(['rfid_uid'=>$uid,'event_type'=>'rfid_scan','source_device'=>'esp32-'.$reader,'reader'=>$reader,'raw_payload'=>$_POST]); $opened=$result['gate_status']==='approved'; if($opened) AccountActivityLogModel::record(null,'device','ESP32 RFID Reader','rfid_gate_opened','RFID '.$uid.' accepted and gate opened.'); json_response(['ok'=>true,'gate_opened'=>$opened,'gate_status'=>$result['gate_status'],'notes'=>$result['notes'],'log_id'=>$result['log_id']]); }
         if($sessionId==='') json_response(['ok'=>false,'message'=>'Invalid scan session.'],422);
         $s=Database::pdo()->prepare("SELECT * FROM rfid_scan_sessions WHERE id=? AND device_id=? AND status='waiting' AND expires_at>NOW() LIMIT 1"); $s->execute([$sessionId,ESP32_DEVICE_ID]); $session=$s->fetch();
         if(!$session) json_response(['ok'=>false,'message'=>'Scan session expired or already completed.'],409);
+        if (($session['purpose'] ?? 'gate') === 'burn' && !empty($_POST['burn_failed'])) {
+            $reason = trim((string)($_POST['failure_reason'] ?? 'RFID profile write failed twice on the ESP32.'));
+            RfidScanSessionModel::finish($sessionId, 'error', [
+                'rfid_uid' => $uid,
+                'notes' => $reason,
+                'burn_write_attempts' => 2,
+            ]);
+            AccountActivityLogModel::record(
+                (int)$session['actor_user_id'],
+                $session['actor_role'],
+                null,
+                'rfid_burn_failed',
+                'RFID burn session '.$sessionId.' stopped after two failed card-write attempts for UID '.$uid.'. '.$reason
+            );
+            json_response([
+                'ok' => true,
+                'burn' => true,
+                'write_profile' => false,
+                'burn_failed' => true,
+                'message' => 'RFID card didn’t burn, try again!',
+                'burn_failed_message' => 'RFID card didn’t burn, try again!',
+            ]);
+        }
         if (($session['purpose'] ?? 'gate') === 'burn') {
             $target = UserModel::findById((int)$session['target_user_id']);
 
