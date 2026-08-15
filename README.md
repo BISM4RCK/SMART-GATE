@@ -1,4 +1,6 @@
-# GOLDEN HOMES Subdivision
+# ARCHIVED
+
+GOLDEN HOMES Subdivision
 
 A lightweight MVC PHP system for a gated community, built for XAMPP and MySQL.
 
